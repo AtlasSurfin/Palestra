@@ -14,6 +14,14 @@
 #include "common.h"
 
 
+void cleanup();
+void handle_int(int sig);
+void handle_tick(int sig);
+void save_stats(StatoPalestra *p, StatServizio *t, Config c);
+void lancia_processo(char *path, int id, int shmid, int msgid);
+void print_report(StatoPalestra *p, Config c);
+void print_report_tot(StatoPalestra *p, int giorni_effettivi);
+
 int min_trascorsi = 0;
 pid_t *atleti_pids = NULL, *istruttori_pids = NULL, pid_cronometro = -1, pid_erogatore = -1, pid_manager;
 int shmid = -1, msgid = -1; //spostate qui per cleanup
@@ -43,13 +51,22 @@ void save_stats(StatoPalestra *p, StatServizio *t, Config c){
     printf("[MANAGER] Statistiche salvate in stats_simulazione.csv\n");
 }
 
+//gestore segnale per SIGINT
 
-//gestore segnale per MANAGER
+void handle_int(int sig){
+    (void)sig;
+    strncpy(causa_chiusura, "INTERRUPTED", 20);
+    cleanup();
+}
+
+//gestore segnale per SIGUSR1
 void handle_tick(int sig){
     (void)sig;
     min_trascorsi++;
     if(palestra) palestra->min_correnti = min_trascorsi;
 }
+
+
 
 
 void lancia_processo(char *path, int id, int shmid, int msgid){
@@ -153,7 +170,7 @@ void cleanup(){
     if(msgid != -1) msgctl(msgid, IPC_RMID, NULL);
     printf("[MANAGER] Risorse pulite correttamente. Alla prossima !\n");
 
-    exit(0);
+    exit(EXIT_SUCCESS);
 
 }
 
@@ -162,8 +179,19 @@ int main(){
     conf = load_conf("palestra.conf");
     pid_manager = getpid();
 
-    signal(SIGUSR1, handle_tick);
-    signal(SIGINT, (void (*)(int))cleanup);
+    struct sigaction sa;
+
+    //Configurazione per SIGUSR1
+    sa.sa_handler = handle_tick;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGUSR1, &sa, NULL);
+
+    //Configurazione per SIGINT
+    sa.sa_handler = handle_int;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
 
 
     //Creazione risorse IPC
@@ -257,9 +285,17 @@ int main(){
                 cleanup();
                 exit(EXIT_FAILURE);
             }
+
+            int s = dummy.service_type;
+            if(s >= 0 && s < NOF_SERVICES){
+                palestra->stats[s].non_serviti_oggi++;
+                palestra->stats[s].non_serviti_tot++;
+            }
             msg_residui++;
         }
-        if(msg_residui > 0) printf("[MANAGER] Rimossi %d messaggi non serviti dalla coda.\n", msg_residui);
+        if(msg_residui > 0){
+            printf("[MANAGER] Giornata finita: rimossi %d messaggi totali.\n", msg_residui);
+        }
         
         
         
