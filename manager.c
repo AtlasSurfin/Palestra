@@ -1,6 +1,9 @@
-#define _POSIX_C_SOURCE 199309L
-#include "config.h"
+#define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
+#include <signal.h>
 #include "common.h"
+#include "config.h"
+
 
 
 void cleanup();
@@ -267,6 +270,8 @@ int main(){
         //Pulizia coda per giorno successivo
         struct msg_pacco dummy;
         int msg_residui = 0;
+
+        sem_wait(&(palestra->mux_stats)); //Proteggo accesso massiccio a risorse
         while(1){
             if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
                 if(errno == ENOMSG) break;
@@ -277,7 +282,6 @@ int main(){
 
             int s = dummy.service_type;
             if(s >= 0 && s < NOF_SERVICES){
-                palestra->stats[s].non_serviti_oggi++;
                 palestra->stats[s].non_serviti_tot++;
             }
             msg_residui++;
