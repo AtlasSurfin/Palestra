@@ -252,10 +252,57 @@ int main(){
         msgctl(msgid, IPC_STAT, &q_status); //Legge stato da coda kernel
         int persi_oggi = q_status.msg_qnum;
 
+        //Pulizia coda per giorno succ. + conteggio reale
+             //Pulizia coda per giorno successivo
+        struct msg_pacco dummy;
+        int msg_residui = 0;
+
+        sem_wait(&(palestra->mux_stats)); //Proteggo accesso massiccio a risorse
+
+        while(1){
+            if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
+                if(errno == ENOMSG) break;
+                perror("[MANAGER] Errore critico durante svuotamento coda");
+                cleanup();
+                exit(EXIT_FAILURE);
+            }
+
+            int s = dummy.service_type;
+            if(s >= 0 && s < NOF_SERVICES){
+                palestra->stats[s].non_serviti_oggi++;
+                palestra->stats[s].non_serviti_tot++;
+            }
+            msg_residui++;
+        }
+        if(msg_residui > 0){
+            printf("[MANAGER] Giornata finita: rimossi %d messaggi totali.\n", msg_residui);
+        }
+
+        sem_post(&(palestra->mux_stats)); ///Rilascio il semaforo precedente
+
+        if(msg_residui > 0){
+            printf("[MANAGER] Giornata finita: rimossi %d messaggi.\n", msg_residui);
+        }
+
+        print_report(palestra, conf);
+
+        if(msg_residui > conf.explode_threshold){
+            strcpy(causa_chiusura, "EXPLODE");
+            g++;
+            break;
+        }
+
+        //Reset stats per giorno succ.
+
         sem_wait(&(palestra->mux_stats));
-        palestra->stats[0].non_serviti_oggi = persi_oggi;
-        for(int i = 0; i < NOF_SERVICES; i++) palestra->stats[i].non_serviti_tot += palestra->stats[i].non_serviti_oggi;
+        for(int i = 0; i < NOF_SERVICES; i++){
+            palestra->stats[i].serviti_oggi = 0;
+            palestra->stats[i].non_serviti_oggi= 0;
+            palestra->stats[i].tempo_attesa_oggi = 0;
+            palestra->stats[i].tempo_erogazione_oggi = 0;
+        }
         sem_post(&(palestra->mux_stats));
+        
 
         //Stampa statistiche e controllo Explode
         print_report(palestra, conf);
@@ -267,28 +314,7 @@ int main(){
         }
 
 
-        //Pulizia coda per giorno successivo
-        struct msg_pacco dummy;
-        int msg_residui = 0;
-
-        sem_wait(&(palestra->mux_stats)); //Proteggo accesso massiccio a risorse
-        while(1){
-            if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
-                if(errno == ENOMSG) break;
-                perror("[MANAGER] Errore critico durante svuotamento coda");
-                cleanup();
-                exit(EXIT_FAILURE);
-            }
-
-            int s = dummy.service_type;
-            if(s >= 0 && s < NOF_SERVICES){
-                palestra->stats[s].non_serviti_tot++;
-            }
-            msg_residui++;
-        }
-        if(msg_residui > 0){
-            printf("[MANAGER] Giornata finita: rimossi %d messaggi totali.\n", msg_residui);
-        }
+   
         
         
         
