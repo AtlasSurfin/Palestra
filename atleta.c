@@ -1,15 +1,22 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/msg.h>
-#include <time.h>
-#include <errno.h>
+#include <signal.h>
 #include "common.h"
 #include "config.h"
 
+StatoPalestra *palestra = NULL;
+
+
+void handle_term(int sig){
+    (void)sig;
+    if(palestra != (void *)-1 && palestra != NULL){
+        shmdt(palestra);
+    }
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[]){
+
+    //Configurazione segnali
+    signal(SIGTERM, handle_term);
 
     //Carico la config
     Config conf = load_conf("palestra.conf");
@@ -24,7 +31,7 @@ int main(int argc, char *argv[]){
     int id_atleta = atoi(argv[3]);
 
     //Attach alla mem condivisa
-    StatoPalestra *palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
+    palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
     if(palestra == (void *)-1){
         perror("[ATLETA] Errore shmat");
         exit(EXIT_FAILURE);
@@ -42,9 +49,11 @@ int main(int argc, char *argv[]){
 
     while(1){
         //Aspetto inizio nuovo giorno
-        if(palestra->giorno_corrente > ultimo_giorno_gestito){
-            ultimo_giorno_gestito = palestra->giorno_corrente;
+        while(palestra->giorno_corrente <= ultimo_giorno_gestito){
+            usleep(50000);//100ms di attesa
+            }
 
+            ultimo_giorno_gestito = palestra->giorno_corrente;
             double daily_thres = (double)rand() / RAND_MAX;
 
             //Decido se venire in palestra oggi
@@ -58,31 +67,30 @@ int main(int argc, char *argv[]){
                 msg.service_type = servizio;
                 msg.min_inizio_attesa = palestra->min_correnti;
 
-                msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0);
+                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
 
                 //Ricezione ticket
-                msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0);
-                printf("[ATLETA %d] Giorno %d: Vado ! Preso il ticket %d per servizio %d (Prob: %.2f)\n", 
-                        id_atleta, ultimo_giorno_gestito + 1, msg.tkt_num, servizio, p_serv);
+                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+                    if(errno == EINVAL || errno == EIDRM) break;
+                }
+
+                printf("[ATLETA %d] Giorno %d: Vado ! Preso il ticket %d per servizio %d\n", 
+                        id_atleta, ultimo_giorno_gestito + 1, msg.tkt_num, servizio);
 
                 //Entrata in coda servizio
                 msg.mtype = 10 + servizio; //mtype speciale 
                 msg.sender_id = id_atleta;
-                msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0);
+                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
             }else{
                 printf("[ATLETA %d] Giorno %d: Oggi resto a casa (Soglia: %.2f > P %.2f)\n",
                          id_atleta, ultimo_giorno_gestito + 1, daily_thres, p_serv);
             }                
             //Aspetto che finisca la giornata
-            while(palestra->min_correnti < 400){
-                usleep(500000);
-                if(palestra->giorno_corrente > ultimo_giorno_gestito) break;
+            while(palestra->min_correnti < 400 && palestra->giorno_corrente == ultimo_giorno_gestito){
+                usleep(200000);
             }
             //Fine allenamento
         }
-
-        usleep(100000); //usato per evitare polling frenetico
-    }
         shmdt(palestra);
         return 0;
 }

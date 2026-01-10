@@ -1,15 +1,4 @@
 #define _POSIX_C_SOURCE 199309L
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/msg.h>
-#include <semaphore.h>
-#include <string.h>
-#include <errno.h>
 #include "config.h"
 #include "common.h"
 

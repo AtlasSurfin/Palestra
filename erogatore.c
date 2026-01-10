@@ -1,9 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/msg.h>
-#include <sys/shm.h>
-#include <string.h>
 #include "common.h"
+#include "config.h"
 
 int main(int argc, char *argv[]){
     if(argc < 3){
