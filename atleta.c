@@ -34,19 +34,27 @@ int main(int argc, char *argv[]){
     int msgid = atoi(argv[2]);
     int id_atleta = atoi(argv[3]);
 
-    //Attach alla mem condivisa
+    //Risorse IPC
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
     if(palestra == (void *)-1){
         perror("[ATLETA] Errore shmat");
         exit(EXIT_FAILURE);
     }
 
+    int semid = semget(SEM_KEY, 2, 0666);
+    if(semid == -1){
+        perror("[ATLETA] Errore semget");
+        exit(EXIT_FAILURE);
+    }
+
+    barrier_signal(semid);
+
     //Seed per rand unico per ogni processo
     srand(time(NULL) ^ (getpid() << 16));
 
     
     //Probabilità di andare in palestra
-    printf("[ATLETA %d] Caricato: P_MIN=%.2f, P_MAX=%.2f\n", id_atleta, conf.p_serv_min, conf.p_serv_max);//Debug
+    //printf("[ATLETA %d] Caricato: P_MIN=%.2f, P_MAX=%.2f\n", id_atleta, conf.p_serv_min, conf.p_serv_max);//Debug
 
     double p_serv = conf.p_serv_min + ((double)rand() / RAND_MAX) * (conf.p_serv_max - conf.p_serv_min);
     int ultimo_giorno_gestito = -1;
@@ -95,6 +103,5 @@ int main(int argc, char *argv[]){
             }
             //Fine allenamento
         }
-        shmdt(palestra);
         return 0;
 }

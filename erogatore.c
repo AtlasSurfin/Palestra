@@ -27,12 +27,20 @@ int main(int argc, char *argv[]){
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);
 
-    //Collegamento mem condivisa
+    //Risorse IPC
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
     if(palestra == (void *)-1){
         perror("[EROGATORE] Fallimento attach");
         exit(EXIT_FAILURE);
     }
+
+    int semid = semget(SEM_KEY, 2, 0666);
+    if(semid == -1){
+        perror("[EROGATORE] Errore semget");
+        exit(EXIT_FAILURE);
+    }
+    
+    barrier_signal(semid);
 
     //Contatori per ticket
     int tkt_counter[NOF_SERVICES] = {0};
@@ -49,12 +57,8 @@ int main(int argc, char *argv[]){
         }
 
         //Resta in attesa di richieste da atleti (mtype = 1)
-        if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 1, IPC_NOWAIT) == -1){
+        if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 1, 0) == -1){
             if(errno == EINVAL || errno == EIDRM) break;
-            if(errno = ENOMSG){
-                usleep(10000);
-                continue;
-            }
         }
 
         int servizio = msg.service_type;
@@ -80,7 +84,5 @@ int main(int argc, char *argv[]){
             }
         }
     }
-
-    shmdt(palestra);
     return 0;
 }

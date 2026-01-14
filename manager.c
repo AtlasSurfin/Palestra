@@ -132,8 +132,13 @@ int main(){
         //Simuliamo una giornata di 400 minuti (= 8 ore)
         while(min_trascorsi < 400) pause(); //Aspettiamo il tick del cronometro
 
+        printf("--- [MANAGER] Fine tempo massimo. Sveglia istruttori... ---\n");
+
+        for(int i = 0; i < conf.nof_workers; i++){
+            if(istruttori_pids[i] > 0) kill(istruttori_pids[i], SIGUSR2);
+        }
+
         //Pulizia coda per giorno succ. + conteggio reale
-             //Pulizia coda per giorno successivo
         struct msg_pacco dummy;
         int msg_residui = 0;
 
@@ -141,7 +146,6 @@ int main(){
 
         while(1){
             if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
-                if(errno == ENOMSG) break;
                 perror("[MANAGER] Errore critico durante svuotamento coda");
                 cleanup();
                 exit(EXIT_FAILURE);

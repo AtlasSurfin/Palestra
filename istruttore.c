@@ -10,6 +10,10 @@ void handle_term(int sig){
     exit(EXIT_SUCCESS);
 }
 
+void handle_wake(int sig){
+    (void)sig;//Non fa nulla, lo usiamo solo per interrompere msgrcv
+}
+
 int main(int argc, char *argv[]){
 
     struct sigaction sa;
@@ -17,6 +21,12 @@ int main(int argc, char *argv[]){
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
+
+    struct sigaction sa_wake;
+    sa_wake.sa_handler = handle_wake;
+    sigemptyset(&sa_wake.sa_mask);
+    sa_wake.sa_flags = 0;
+    sigaction(SIGUSR2, &sa_wake, NULL);
 
     //Controllo args
     if(argc < 4) exit(EXIT_FAILURE);
@@ -27,16 +37,25 @@ int main(int argc, char *argv[]){
     int msgid = atoi(argv[2]);
     int id_istruttore = atoi(argv[3]);
 
-    //Attach
+    //Risorse IPC
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
     if(palestra == (void *)-1){
         perror("Errore con attach");
         exit(EXIT_FAILURE);
     }
+
+    int semid = semget(SEM_KEY, 2, 0666);
+    if(semid == -1){
+        perror("[ISTRUTTORE] Errore semget");
+        exit(EXIT_FAILURE);
+    }
+    //Calcolo servizio dell'istruttore
     srand(time(NULL) ^ (getpid() << 16));
 
     int mio_servizio = id_istruttore % NOF_SERVICES;
     int ultimo_giorno = -1;
+
+    barrier_signal(semid);
 
     printf("[ISTRUTTORE %d] Pronto. Mansione corrente: Servizio %d\n", id_istruttore, mio_servizio);
 
@@ -67,12 +86,9 @@ int main(int argc, char *argv[]){
         while(palestra->min_correnti < 400 && palestra->giorno_corrente == g){
             struct msg_pacco pacco;
 
-            if(msgrcv(msgid, &pacco, sizeof(struct msg_pacco) - sizeof(long), mio_servizio + 10, IPC_NOWAIT) == -1){
+            if(msgrcv(msgid, &pacco, sizeof(struct msg_pacco) - sizeof(long), mio_servizio + 10, 0) == -1){
+                if(errno == EINTR) continue;
                 if(errno == EIDRM || errno == EINVAL) break;
-                if(errno == ENOMSG){
-                    usleep(1000);
-                    continue;
-                }
                 continue;
             }
 
@@ -87,7 +103,7 @@ int main(int argc, char *argv[]){
                 sleep_min(durata, conf.n_nano_secs);
 
                 //Aggiornamento Stats
-                sem_wait(&(palestra->mux_stats));
+                sem_p(semid, MUX_STATS);
 
                 palestra->stats[mio_servizio].serviti_oggi++;
                 palestra->stats[mio_servizio].serviti_tot++;
@@ -103,18 +119,16 @@ int main(int argc, char *argv[]){
                 //Gestione pausa
                 if((rand() % 100) < 15){
                     palestra->pause_tot++;
-                    sem_post(&(palestra->mux_stats));
+                    sem_v(semid, MUX_STATS);
 
                     int durata_pausa = 5 + (rand() % 6); //pausa di 5/10 min
                     printf("[ISTRUTTORE %d] Pausa caffè...\n", id_istruttore);
                     sleep_min(durata_pausa, conf.n_nano_secs);
                 }else{
-                    sem_post(&(palestra->mux_stats));
+                    sem_v(semid, MUX_STATS);
                 }
 
         }
     }
-
-    shmdt(palestra);
     return 0;
 }
