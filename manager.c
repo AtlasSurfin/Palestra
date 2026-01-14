@@ -1,7 +1,8 @@
 #include "common.h"
+#include "config.h"
 #include <stdio.h>
 #include <signal.h>
-#include "config.h"
+
 
 
 
@@ -15,7 +16,7 @@ void print_report_tot(StatoPalestra *p, int giorni_effettivi);
 
 int min_trascorsi = 0;
 pid_t *atleti_pids = NULL, *istruttori_pids = NULL, pid_cronometro = -1, pid_erogatore = -1, pid_manager;
-int shmid = -1, msgid = -1; //spostate qui per cleanup
+int shmid = -1, semid = -1, msgid = -1; //spostate qui per cleanup
 StatoPalestra *palestra = NULL;
 Config conf;
 char causa_chiusura[20] = "TIMEOUT";
@@ -39,6 +40,7 @@ int main(){
     //Leggo da file di configurazione
     conf = load_conf("palestra.conf");
     pid_manager = getpid();
+    int n_figli = conf.nof_workers + conf.nof_users + 1;
 
     struct sigaction sa;
 
@@ -54,20 +56,29 @@ int main(){
     sigaction(SIGINT, &sa, NULL);
 
 
-    //Creazione risorse IPC
+    //Creazione risorse IPC: memoria condivisa
     shmid = shmget(IPC_PRIVATE, sizeof(StatoPalestra), IPC_CREAT | 0666);
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
 
-    //Inizializzazione memoria
+    //Creazione semafori
+    semid  = semget(SEM_KEY, 2, IPC_CREAT | 0666);
+    if(semid == -1){
+        perror("Errore semget");
+        exit(EXIT_FAILURE);
+    }
+
+    //Inizializzazione memoria e creazione coda messaggi
     memset(palestra, 0, sizeof(StatoPalestra));
     msgid = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
 
 
-    //Inizializzazione semaforo per stats
-    sem_init(&(palestra->mux_stats), 1, 1);
-    palestra->min_correnti = 0;
-    palestra->giorno_corrente = 0;
-    palestra->totale_operatori_attivi = conf.nof_workers;
+    //Inizializzazione semafori
+    union semun arg;
+    arg.val = 1;
+    semctl(semid, MUX_STATS, SETVAL, arg); //Mutex libero
+
+    arg.val = 0;
+    semctl(semid, BARRIER_SEM, SETVAL, arg); //Barriera a 0
 
     //Lancio erogatore
     if((pid_erogatore = fork()) == 0) lancia_processo("./erogatore", 0, shmid, msgid);
@@ -86,8 +97,15 @@ int main(){
     }
 
     //Barriera di Inizializzazione
-    printf("[MANAGER] Attesa inizializzazione processi figli...\n");
-    sleep(1);
+    printf("[MANAGER] Attesa inizializzazione %d processi figli...\n", n_figli);
+
+    struct sembuf wait_op = {BARRIER_SEM, -1, 0}; //Operazione p
+    for(int i = 0; i < n_figli; i++){
+        if(semop(semid, &wait_op, 1) == -1) perror("[MANAGER] Errore semop barriera\n");
+    }
+
+
+    printf("[MANAGER] Tutti i processi sono allineati. Inizio simulazione !\n");
 
     //Cronometro
     if((pid_cronometro = fork()) == 0){
@@ -119,7 +137,7 @@ int main(){
         struct msg_pacco dummy;
         int msg_residui = 0;
 
-        sem_wait(&(palestra->mux_stats)); //Proteggo accesso massiccio a risorse
+        sem_p(semid, MUX_STATS); //Proteggo accesso massiccio a risorse
 
         while(1){
             if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
@@ -137,7 +155,7 @@ int main(){
             msg_residui++;
         }
 
-        sem_post(&(palestra->mux_stats)); ///Rilascio il semaforo precedente
+        sem_v(semid, MUX_STATS); ///Rilascio il semaforo precedente
 
         print_report(palestra, conf);
         save_stats(palestra, NULL, conf);
@@ -150,14 +168,14 @@ int main(){
 
         //Reset stats per giorno succ.
 
-        sem_wait(&(palestra->mux_stats));
+        sem_p(semid, MUX_STATS);
         for(int i = 0; i < NOF_SERVICES; i++){
             palestra->stats[i].serviti_oggi = 0;
             palestra->stats[i].non_serviti_oggi= 0;
             palestra->stats[i].tempo_attesa_oggi = 0;
             palestra->stats[i].tempo_erogazione_oggi = 0;
         }
-        sem_post(&(palestra->mux_stats));
+        sem_v(semid, MUX_STATS);
  }
 
     cleanup();
@@ -217,7 +235,7 @@ void cleanup(){
     if(pid_erogatore > 0) kill(pid_erogatore, SIGTERM);
 
     if(palestra){
-        sem_destroy(&(palestra->mux_stats));
+        if(semid != -1) semctl(semid, 0, IPC_RMID);
         shmdt(palestra);
     }
     if(shmid != -1) shmctl(shmid, IPC_RMID, NULL);
