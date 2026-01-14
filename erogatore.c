@@ -11,6 +11,7 @@ void handle_term(int sig){
 
 int main(int argc, char *argv[]){
 
+    //Configurazione segnali
     signal(SIGTERM, handle_term);
 
     if(argc < 3){

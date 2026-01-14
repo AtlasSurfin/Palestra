@@ -1,5 +1,6 @@
 #include "common.h"
 #include "config.h"
+#include <errno.h>
 
 StatoPalestra *palestra = NULL;
 
@@ -11,12 +12,16 @@ void handle_term(int sig){
 
 int main(int argc, char *argv[]){
 
-    signal(SIGTERM, handle_term);
-
-    Config conf = load_conf("palestra.conf");
+    struct sigaction sa;
+    sa.sa_handler = handle_term;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
 
     //Controllo args
     if(argc < 4) exit(EXIT_FAILURE);
+
+    Config conf = load_conf("palestra.conf");
 
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);
@@ -37,7 +42,7 @@ int main(int argc, char *argv[]){
 
     while(1){
         //Attesa nuova giornata
-        while(palestra->giorno_corrente == ultimo_giorno) usleep(50000);
+        while(palestra->giorno_corrente == ultimo_giorno) usleep(10000);
         int g = palestra->giorno_corrente;
         ultimo_giorno = g;
         int mia_postazione = -1;
@@ -53,20 +58,26 @@ int main(int argc, char *argv[]){
         if(mia_postazione == -1){
             printf("[ISTRUTTORE %d] Giorno %d: Servizio %d non richiesto. Oggi riposo.\n", id_istruttore, g + 1, mio_servizio);
             //Salto a fine giornata
-            while(palestra->min_correnti < 400 && g == ultimo_giorno) usleep(500000);
+            while(palestra->min_correnti < 400 && palestra->giorno_corrente == g) usleep(500000);
             continue;
         }
 
         printf("[ISTRUTTORE %d] Al lavoro (Postazione %d, Servizio %d)\n", id_istruttore, mia_postazione, mio_servizio);
 
-        while(palestra->min_correnti < 400 && g == ultimo_giorno){
+        while(palestra->min_correnti < 400 && palestra->giorno_corrente == g){
             struct msg_pacco pacco;
 
-            if(msgrcv(msgid, &pacco, sizeof(struct msg_pacco) - sizeof(long), mio_servizio + 10, 0) == -1){
+            if(msgrcv(msgid, &pacco, sizeof(struct msg_pacco) - sizeof(long), mio_servizio + 10, IPC_NOWAIT) == -1){
                 if(errno == EIDRM || errno == EINVAL) break;
+                if(errno == ENOMSG){
+                    usleep(1000);
+                    continue;
+                }
                 continue;
             }
 
+
+            //Servizio atleta
             int inizio_erog = palestra->min_correnti;
                 int durata = 5 + (rand() % 11);
                 
@@ -83,17 +94,23 @@ int main(int argc, char *argv[]){
 
                 long attesa = inizio_erog - pacco.min_inizio_attesa;
                 if(attesa < 0) attesa = 0; //Protezione contro possibili valori negativi per attesa
+
                 palestra->stats[mio_servizio].tempo_attesa_oggi += attesa;
                 palestra->stats[mio_servizio].tempo_attesa_tot += attesa;
                 palestra->stats[mio_servizio].tempo_erogazione_oggi += durata;
                 palestra->stats[mio_servizio].tempo_erogazione_tot += durata;
 
-                //Possibile gestione pausa casuale
-                if((rand() % 10 )< 2){
+                //Gestione pausa
+                if((rand() % 100) < 15){
                     palestra->pause_tot++;
+                    sem_post(&(palestra->mux_stats));
+
+                    int durata_pausa = 5 + (rand() % 6); //pausa di 5/10 min
                     printf("[ISTRUTTORE %d] Pausa caffè...\n", id_istruttore);
+                    sleep_min(durata_pausa, conf.n_nano_secs);
+                }else{
+                    sem_post(&(palestra->mux_stats));
                 }
-                sem_post(&(palestra->mux_stats));
 
         }
     }

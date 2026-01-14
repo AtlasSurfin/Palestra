@@ -1,6 +1,6 @@
-#include <signal.h>
 #include "common.h"
 #include "config.h"
+#include <signal.h>
 
 StatoPalestra *palestra = NULL;
 

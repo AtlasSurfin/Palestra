@@ -1,7 +1,6 @@
-#define _POSIX_C_SOURCE 200809L
+#include "common.h"
 #include <stdio.h>
 #include <signal.h>
-#include "common.h"
 #include "config.h"
 
 
