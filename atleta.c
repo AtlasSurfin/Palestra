@@ -16,7 +16,11 @@ void handle_term(int sig){
 int main(int argc, char *argv[]){
 
     //Configurazione segnali
-    signal(SIGTERM, handle_term);
+    struct sigaction sa;
+    sa.sa_handler = handle_term;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
 
     //Carico la config
     Config conf = load_conf("palestra.conf");

@@ -1,0 +1,8 @@
+*.o
+manager
+atleta
+istruttore
+erogatore
+stats_simulazione.csv
+push.ps1
+pull.ps1

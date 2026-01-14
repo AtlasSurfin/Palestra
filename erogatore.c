@@ -12,7 +12,12 @@ void handle_term(int sig){
 int main(int argc, char *argv[]){
 
     //Configurazione segnali
-    signal(SIGTERM, handle_term);
+    struct sigaction sa;
+    sa.sa_handler = handle_term;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
+    
 
     if(argc < 3){
         fprintf(stderr, "Uso: %s <shmid> <msgid>\n", argv[0]);
@@ -44,10 +49,12 @@ int main(int argc, char *argv[]){
         }
 
         //Resta in attesa di richieste da atleti (mtype = 1)
-        if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 1, 0) == -1){
+        if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 1, IPC_NOWAIT) == -1){
             if(errno == EINVAL || errno == EIDRM) break;
-            perror("[EROGATORE] Fallimento ricezione messaggio.\n");
-            break;
+            if(errno = ENOMSG){
+                usleep(10000);
+                continue;
+            }
         }
 
         int servizio = msg.service_type;
