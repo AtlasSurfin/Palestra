@@ -7,7 +7,7 @@ StatoPalestra *palestra = NULL;
 void handle_term(int sig){
     (void)sig;
     if(palestra != (void *)-1 && palestra != NULL) shmdt(palestra);
-    exit(EXIT_SUCCESS);
+    _exit(EXIT_SUCCESS);
 }
 
 void handle_wake(int sig){
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]){
 
     //Controllo args
     if(argc < 5){
-        fprintf("[ISTRUTTORE] Errore args insufficienti.\n", argv[0]);
+        fprintf(stderr, "[ISTRUTTORE] Errore args insufficienti in %s\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 

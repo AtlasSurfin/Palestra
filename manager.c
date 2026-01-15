@@ -206,7 +206,7 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 
     //Se si arriva qui è perchè c'è stato un errore
     perror("Execv fallita !"); 
-    exit(EXIT_FAILURE);
+    _exit(EXIT_FAILURE);
 }
 
 void cleanup(){

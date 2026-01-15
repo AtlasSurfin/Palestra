@@ -6,7 +6,7 @@ StatoPalestra *palestra = NULL;
 void handle_term(int sig){
     (void)sig;
     if(palestra != (void *)-1 && palestra != NULL) shmdt(palestra);
-    exit(EXIT_SUCCESS);
+    _exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char *argv[]){

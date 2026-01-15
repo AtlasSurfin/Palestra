@@ -7,10 +7,8 @@ StatoPalestra *palestra = NULL;
 
 void handle_term(int sig){
     (void)sig;
-    if(palestra != (void *)-1 && palestra != NULL){
-        shmdt(palestra);
-    }
-    exit(EXIT_SUCCESS);
+    if(palestra != (void *)-1 && palestra != NULL) shmdt(palestra);
+    _exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char *argv[]){
@@ -25,7 +23,7 @@ int main(int argc, char *argv[]){
 
     //COntrollo args: 0 = nome, 1 = shmid, 2 = msgid, 3 = id_atleta
     if(argc < 5){
-        fprintf("[ATLETA] Errore: args insufficienti.\n", argv[0]);
+        fprintf(stderr, "[ATLETA] Errore: args insufficienti in %s\n", argv[0]);
         exit(EXIT_FAILURE);}
 
     //Carico la config
@@ -75,6 +73,7 @@ int main(int argc, char *argv[]){
                 struct msg_pacco msg;
 
                 //Richiesta ticket all'erogatore
+                msg.tkt_num = 0;
                 msg.mtype = 1; //Richieste per erogatore
                 msg.sender_id = getpid();
                 msg.service_type = servizio;
