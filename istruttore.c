@@ -29,9 +29,13 @@ int main(int argc, char *argv[]){
     sigaction(SIGUSR2, &sa_wake, NULL);
 
     //Controllo args
-    if(argc < 4) exit(EXIT_FAILURE);
+    if(argc < 5){
+        fprintf("[ISTRUTTORE] Errore args insufficienti.\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
 
-    Config conf = load_conf("conf_timeout.conf");
+    char *nome_conf = argv[4];
+    Config conf = load_conf(nome_conf);
 
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);

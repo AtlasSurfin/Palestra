@@ -19,13 +19,18 @@ int main(int argc, char *argv[]){
     sigaction(SIGTERM, &sa, NULL);
     
 
-    if(argc < 3){
-        fprintf(stderr, "Uso: %s <shmid> <msgid>\n", argv[0]);
+    if(argc < 5){
+        fprintf(stderr, "Uso: %s <shmid> <msgid> <id> <conf_file>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);
+    char *nome_conf = argv[4];
+
+
+    //Carico configurazione
+    Config conf = load_conf(nome_conf);
 
     //Risorse IPC
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);

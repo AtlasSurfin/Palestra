@@ -10,7 +10,7 @@ void cleanup();
 void handle_int(int sig);
 void handle_tick(int sig);
 void save_stats(StatoPalestra *p, StatServizio *t, Config c);
-void lancia_processo(char *path, int id, int shmid, int msgid);
+void lancia_processo(char *path, int id, int shmid, int msgid, char *conf_file);
 void print_report(StatoPalestra *p, Config c);
 void print_report_tot(StatoPalestra *p, int giorni_effettivi);
 
@@ -36,9 +36,18 @@ void handle_tick(int sig){
     if(palestra) palestra->min_correnti = min_trascorsi;
 }
 
-int main(){
+int main(int argc, char*argv[]){
     //Leggo da file di configurazione
-    conf = load_conf("conf_timeout.conf");
+    char *nome_conf;
+    if(argc > 1){
+        nome_conf = argv[1];
+        printf("[MANAGER] Uso file.conf da riga di comando: %s\n", nome_conf);
+    }else{
+        nome_conf = "conf_timeout.conf";
+        printf("[MANAGER] Nessun file.conf da riga di comando. Uso valore default: %s\n", nome_conf);
+    }
+
+    conf = load_conf(nome_conf);
     pid_manager = getpid();
     int n_figli = conf.nof_workers + conf.nof_users + 1;
 
@@ -81,19 +90,19 @@ int main(){
     semctl(semid, BARRIER_SEM, SETVAL, arg); //Barriera a 0
 
     //Lancio erogatore
-    if((pid_erogatore = fork()) == 0) lancia_processo("./erogatore", 0, shmid, msgid);
+    if((pid_erogatore = fork()) == 0) lancia_processo("./erogatore", 0, shmid, msgid, nome_conf);
 
     atleti_pids = malloc(sizeof(pid_t) * conf.nof_users);
     istruttori_pids = malloc(sizeof(pid_t) * conf.nof_workers);
 
     //Lancio Istruttori
     for(int i = 0; i < conf.nof_workers; i++){
-        if((istruttori_pids[i] = fork()) == 0) lancia_processo("./istruttore", i, shmid, msgid);
+        if((istruttori_pids[i] = fork()) == 0) lancia_processo("./istruttore", i, shmid, msgid, nome_conf);
     }
 
     //Lancio Atleti
     for(int i = 0; i < conf.nof_users; i++){
-        if((atleti_pids[i] = fork()) == 0) lancia_processo("./atleta", i, shmid, msgid);
+        if((atleti_pids[i] = fork()) == 0) lancia_processo("./atleta", i, shmid, msgid, nome_conf);
     }
 
     //Barriera di Inizializzazione
@@ -186,14 +195,17 @@ int main(){
     return 0;
 }
 
-void lancia_processo(char *path, int id, int shmid, int msgid){
+void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
     char s_shm[12], s_msg[12], s_id[12];
     sprintf(s_shm, "%d", shmid);
     sprintf(s_msg, "%d", msgid);
     sprintf(s_id, "%d", id);
-    char *args[] = {path, s_shm, s_msg, s_id, NULL};
+
+    char *args[] = {path, s_shm, s_msg, s_id, conf_file, NULL};
     execv(args[0], args);
-    perror("Execv fallita !");
+
+    //Se si arriva qui è perchè c'è stato un errore
+    perror("Execv fallita !"); 
     exit(EXIT_FAILURE);
 }
 

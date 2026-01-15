@@ -24,10 +24,13 @@ int main(int argc, char *argv[]){
 
 
     //COntrollo args: 0 = nome, 1 = shmid, 2 = msgid, 3 = id_atleta
-    if(argc < 4) exit(EXIT_FAILURE);
+    if(argc < 5){
+        fprintf("[ATLETA] Errore: args insufficienti.\n", argv[0]);
+        exit(EXIT_FAILURE);}
 
     //Carico la config
-    Config conf = load_conf("conf_timeout.conf");
+    char *nome_conf = argv[4];
+    Config conf = load_conf(nome_conf);
 
     //Recupero ID passati dal manager come stringhe
     int shmid = atoi(argv[1]);
