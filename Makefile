@@ -3,32 +3,26 @@ CC = gcc
 # -Wvla -Wextra -Werror sono richiesti per sicurezza dal progetto
 CFLAGS = -Wvla -Wextra -Werror -D_GNU_SOURCE -g  #-g è usato per debugger di VS Code
 
-LDFLAGS = -lpthread -lrt #necessario per semafori POSIX
-
+LDFLAGS = -lpthread
 #nome exe finale
 TARGETS = manager atleta istruttore erogatore
+OBJS_COMMON = config.o
 
 #Header files
 HEADERS = common.h config.h
 
 #REGOLE#
 
-all: $(TARGETS) #questa viene eseguita scrivendo solo 'make' #
+all: $(TARGETS)
 
-manager: manager.o config.o
-		$(CC) $(CFLAGS) -o manager manager.o config.o $(LDFLAGS)
-atleta: atleta.o config.o
-		$(CC) $(CFLAGS) -o atleta atleta.o config.o $(LDFLAGS)
+#per ogni nome in TARGETS usa il proprio .o + config.o#
+$(TARGETS): %: %.o $(OBJS_COMMON)
+		$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-istruttore: istruttore.o config.o
-		$(CC) $(CFLAGS) -o istruttore istruttore.o config.o $(LDFLAGS)
-
-erogatore: erogatore.o
-		$(CC) $(CFLAGS) -o erogatore erogatore.o $(LDFLAGS)
-
-#regole generiche
+#In generale compila tutti i file.c in .o, ricompila se cambia un header#
 %.o: %.c $(HEADERS)
-		$(CC) $(CFLAGS) -c $<
+		$(CC) $(CFLAGS) -c $< -o $@
+
 
 #rimuove file.o ed exe per ripartire da zero #
 clean:

@@ -31,7 +31,7 @@ int main(int argc, char *argv[]){
     //Controllo args
     if(argc < 4) exit(EXIT_FAILURE);
 
-    Config conf = load_conf("palestra.conf");
+    Config conf = load_conf("conf_timeout.conf");
 
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);
@@ -81,6 +81,11 @@ int main(int argc, char *argv[]){
             continue;
         }
 
+        //Aggiorno il totale di op attivi
+        sem_p(semid, MUX_STATS);
+        palestra->totale_operatori_attivi++;
+        sem_v(semid, MUX_STATS);
+
         printf("[ISTRUTTORE %d] Al lavoro (Postazione %d, Servizio %d)\n", id_istruttore, mia_postazione, mio_servizio);
 
         while(palestra->min_correnti < 400 && palestra->giorno_corrente == g){
@@ -129,6 +134,11 @@ int main(int argc, char *argv[]){
                 }
 
         }
+
+        //Decremento il semaforo perchè a fine giornata l'istruttore non è più attivo
+        sem_p(semid, MUX_STATS);
+        palestra->totale_operatori_attivi--;
+        sem_v(semid, MUX_STATS);
     }
     return 0;
 }

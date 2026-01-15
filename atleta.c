@@ -22,12 +22,12 @@ int main(int argc, char *argv[]){
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
 
-    //Carico la config
-    Config conf = load_conf("palestra.conf");
 
     //COntrollo args: 0 = nome, 1 = shmid, 2 = msgid, 3 = id_atleta
     if(argc < 4) exit(EXIT_FAILURE);
-    
+
+    //Carico la config
+    Config conf = load_conf("conf_timeout.conf");
 
     //Recupero ID passati dal manager come stringhe
     int shmid = atoi(argv[1]);
@@ -61,9 +61,7 @@ int main(int argc, char *argv[]){
 
     while(1){
         //Aspetto inizio nuovo giorno
-        while(palestra->giorno_corrente <= ultimo_giorno_gestito){
-            usleep(50000);//100ms di attesa
-            }
+        while(palestra->giorno_corrente <= ultimo_giorno_gestito) usleep(50000);//100ms di attesa
 
             ultimo_giorno_gestito = palestra->giorno_corrente;
             double daily_thres = (double)rand() / RAND_MAX;
@@ -79,10 +77,16 @@ int main(int argc, char *argv[]){
                 msg.service_type = servizio;
                 msg.min_inizio_attesa = palestra->min_correnti;
 
-                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
+                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), IPC_NOWAIT) == -1){
+                    if(errno == EAGAIN){
+                        printf("[ATLETA %d] Coda erogatore piena. Torno a casa...\n", id_atleta);
+                        goto fine_giornata;
+                    }
+                    break;
+                }
 
                 //Ricezione ticket
-                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), IPC_NOWAIT) == -1){
                     if(errno == EINVAL || errno == EIDRM) break;
                 }
 
@@ -92,12 +96,18 @@ int main(int argc, char *argv[]){
                 //Entrata in coda servizio
                 msg.mtype = 10 + servizio; //mtype speciale 
                 msg.sender_id = id_atleta;
-                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
+                if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                    if(errno == EAGAIN){
+                        printf("[ATLETA %d] Coda servizio %d piena. Ci rinuncio, torno a casa...\n", id_atleta, servizio);
+                        goto fine_giornata;
+                    }
+                    break;
+                }
             }else{
-                printf("[ATLETA %d] Giorno %d: Oggi resto a casa (Soglia: %.2f > P %.2f)\n",
-                         id_atleta, ultimo_giorno_gestito + 1, daily_thres, p_serv);
+                printf("[ATLETA %d] Giorno %d: Oggi resto a casa\n", id_atleta, ultimo_giorno_gestito + 1);
             }                
-            //Aspetto che finisca la giornata
+            
+fine_giornata:
             while(palestra->min_correnti < 400 && palestra->giorno_corrente == ultimo_giorno_gestito){
                 usleep(200000);
             }

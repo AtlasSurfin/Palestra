@@ -38,7 +38,7 @@ void handle_tick(int sig){
 
 int main(){
     //Leggo da file di configurazione
-    conf = load_conf("palestra.conf");
+    conf = load_conf("conf_timeout.conf");
     pid_manager = getpid();
     int n_figli = conf.nof_workers + conf.nof_users + 1;
 
@@ -132,7 +132,7 @@ int main(){
         //Simuliamo una giornata di 400 minuti (= 8 ore)
         while(min_trascorsi < 400) pause(); //Aspettiamo il tick del cronometro
 
-        printf("--- [MANAGER] Fine tempo massimo. Sveglia istruttori... ---\n");
+        printf("[MANAGER] Fine giornata %d. Notifico gli istruttori...\n", g + 1);
 
         for(int i = 0; i < conf.nof_workers; i++){
             if(istruttori_pids[i] > 0) kill(istruttori_pids[i], SIGUSR2);
@@ -146,9 +146,9 @@ int main(){
 
         while(1){
             if(msgrcv(msgid, &dummy, sizeof(struct msg_pacco) - sizeof(long), 0, IPC_NOWAIT) == -1){
-                perror("[MANAGER] Errore critico durante svuotamento coda");
-                cleanup();
-                exit(EXIT_FAILURE);
+                if(errno == ENOMSG) break; //Coda vuota, esco dal loop
+                if(errno == EINTR) continue; //Interrotto da tick, riproviamo
+                break;
             }
 
             int s = dummy.service_type;
