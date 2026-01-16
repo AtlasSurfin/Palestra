@@ -47,6 +47,8 @@ int main(int argc, char *argv[]){
 
         if(pid == 0){
             char s_shmid[16], s_msgid[16], s_id[16];
+            /*Usiamo buffer da 16 e non da 12 per evitare eventuali buffer overflow
+            Ma soprattutto perchè con chiavi definite potremmo avere valori più grandi*/
 
             sprintf(s_shmid, "%d", shmid);
             sprintf(s_msgid, "%d", msgid);
@@ -58,7 +60,7 @@ int main(int argc, char *argv[]){
                 s_shmid,
                 s_msgid,
                 s_id,
-                "palestra.conf",
+                "conf_timeout.conf",
                 NULL
             };
 
