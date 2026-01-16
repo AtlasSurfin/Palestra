@@ -107,4 +107,11 @@ static inline void barrier_signal(int semid){
 if(semop(semid, &sb, 1) == -1 && errno != EINTR) perror("Errore barriera_signal"); 
 }
 
+void safe_exec(char *path, char *args[]){
+    extern char **environ;
+    execve(path, args, environ);
+    perror("Errore fatale execve");
+    exit(EXIT_FAILURE);
+}
+
 #endif

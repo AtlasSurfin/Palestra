@@ -202,11 +202,7 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
     sprintf(s_id, "%d", id);
 
     char *args[] = {path, s_shm, s_msg, s_id, conf_file, NULL};
-    execv(args[0], args);
-
-    //Se si arriva qui è perchè c'è stato un errore
-    perror("Execv fallita !"); 
-    _exit(EXIT_FAILURE);
+    safe_exec(args[0], args);
 }
 
 void cleanup(){

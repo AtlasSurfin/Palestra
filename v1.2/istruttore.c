@@ -94,7 +94,8 @@ int main(int argc, char *argv[]){
 
         while(palestra->min_correnti < 400 && palestra->giorno_corrente == g){
             struct msg_pacco pacco;
-
+            
+            //Aspetto atleta
             if(msgrcv(msgid, &pacco, sizeof(struct msg_pacco) - sizeof(long), mio_servizio + 10, 0) == -1){
                 if(errno == EINTR) continue;
                 if(errno == EIDRM || errno == EINVAL) break;
@@ -104,38 +105,50 @@ int main(int argc, char *argv[]){
 
             //Servizio atleta
             int inizio_erog = palestra->min_correnti;
-                int durata = 5 + (rand() % 11);
-                
-                printf("[ISTRUTTORE %d] Inizio servizio per Atleta %d (min %d), Durata: %d\n", id_istruttore, pacco.sender_id, inizio_erog, durata);
+            int durata = 5 + (rand() % 11);
+            
+            printf("[ISTRUTTORE %d] Inizio servizio per Atleta %d (min %d), Durata: %d\n", id_istruttore, pacco.sender_id, inizio_erog, durata);
 
-                //Simulo tempo di lavoro
-                sleep_min(durata, conf.n_nano_secs);
+            //Simulo tempo di lavoro
+            sleep_min(durata, conf.n_nano_secs);
 
-                //Aggiornamento Stats
-                sem_p(semid, MUX_STATS);
+            //Aggiornamento Stats
+            sem_p(semid, MUX_STATS);
 
-                palestra->stats[mio_servizio].serviti_oggi++;
-                palestra->stats[mio_servizio].serviti_tot++;
+            palestra->stats[mio_servizio].serviti_oggi++;
+            palestra->stats[mio_servizio].serviti_tot++;
 
-                long attesa = inizio_erog - pacco.min_inizio_attesa;
-                if(attesa < 0) attesa = 0; //Protezione contro possibili valori negativi per attesa
+            long attesa = inizio_erog - pacco.min_inizio_attesa;
+            if(attesa < 0) attesa = 0; //Protezione contro possibili valori negativi per attesa
 
-                palestra->stats[mio_servizio].tempo_attesa_oggi += attesa;
-                palestra->stats[mio_servizio].tempo_attesa_tot += attesa;
-                palestra->stats[mio_servizio].tempo_erogazione_oggi += durata;
-                palestra->stats[mio_servizio].tempo_erogazione_tot += durata;
+            palestra->stats[mio_servizio].tempo_attesa_oggi += attesa;
+            palestra->stats[mio_servizio].tempo_attesa_tot += attesa;
+            palestra->stats[mio_servizio].tempo_erogazione_oggi += durata;
+            palestra->stats[mio_servizio].tempo_erogazione_tot += durata;
 
-                //Gestione pausa
-                if((rand() % 100) < 15){
-                    palestra->pause_tot++;
-                    sem_v(semid, MUX_STATS);
+            //Gestione pausa
+            if((rand() % 100) < 15){
+                palestra->pause_tot++;
+                sem_v(semid, MUX_STATS);
 
-                    int durata_pausa = 5 + (rand() % 6); //pausa di 5/10 min
-                    printf("[ISTRUTTORE %d] Pausa caffè...\n", id_istruttore);
-                    sleep_min(durata_pausa, conf.n_nano_secs);
-                }else{
-                    sem_v(semid, MUX_STATS);
-                }
+                int durata_pausa = 5 + (rand() % 6); //pausa di 5/10 min
+                printf("[ISTRUTTORE %d] Pausa caffè...\n", id_istruttore);
+                sleep_min(durata_pausa, conf.n_nano_secs);
+            }else{
+                sem_v(semid, MUX_STATS);
+            }
+
+            //Notifica di fine servizio
+            struct msg_pacco conferma; 
+            conferma.mtype = pacco.sender_id;
+            conferma.sender_id = getpid();
+            conferma.tkt_num = pacco.tkt_num;
+
+            if(msgsnd(msgid, &conferma, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                perror("[ISTRUTTORE] Errore invio conferma fine servizio.");
+            }else{
+                printf("[ISTRUTTORE %d] Servizio completato per Atleta %d. Notifica inviata.\n", id_istruttore, (int)pacco.sender_id);
+            }
 
         }
 

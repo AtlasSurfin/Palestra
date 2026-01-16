@@ -21,7 +21,14 @@ Config load_conf(const char *filename){
         double valore_dec;
         //legge tutto fino ad uguale, poi cerca il numero dopo l'uguale
         if(sscanf(linea, "%[^=]=%lf", chiave, &valore_dec) == 2){
-            strtok(chiave, " \t\n\r");
+            
+            //Aggiungiamo un loop per la pulizia da spazi bianchi in coda alla chiave
+            char *p = chiave + strlen(chiave) - 1;
+            while(p > chiave && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')){
+                *p = '\0';
+                p--;
+            }
+
             if(strcmp(chiave, "SIM_DURATION") == 0) conf.sim_duration = (long)valore_dec;
             else if(strcmp(chiave, "N_NANO_SECS") == 0) conf.n_nano_secs = (long)valore_dec;
             else if(strcmp(chiave, "NOF_WORKERS") == 0) conf.nof_workers = (int)valore_dec;
