@@ -18,7 +18,7 @@ int main(int argc, char *argv[]){
 
     //Aggancio a risorse IPC esistenti
     int shmid = shmget(SHM_KEY, sizeof(StatoPalestra), 0666);
-    int semid = msgget(SEM_KEY, 2, 0666);
+    int semid = semget(SEM_KEY, 2, 0666);
     int msgid = (MSG_KEY, 0666);
 
     if(shmid == -1 || semid == -1 || msgid == -1){
@@ -46,7 +46,11 @@ int main(int argc, char *argv[]){
         }
 
         if(pid == 0){
-            char s_shmid[16], s_msgid[16], s_semid[16];
+            char s_shmid[16], s_msgid[16], s_id[16];
+
+            sprintf(s_shmid, "%d", shmid);
+            sprintf(s_msgid, "%d", msgid);
+            sprintf(s_id, "%d", 900 + i);
 
             //Preparo nuovo argv
             char *n_argv[] = {

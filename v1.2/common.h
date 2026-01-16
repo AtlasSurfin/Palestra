@@ -28,8 +28,10 @@
 #define SERVIZIO_NUTRIZIONE 4
 #define SERVIZIO_SHOP 5
 
-//Chiave univoca per set semafori
+//Chiavi definite per risorse IPC
+#define MSG_KEY 789012
 #define SEM_KEY 123456
+#define SHM_KEY 101101
 
 //Indici semafori nel set
 #define MUX_STATS 0

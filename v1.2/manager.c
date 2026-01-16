@@ -66,7 +66,7 @@ int main(int argc, char*argv[]){
 
 
     //Creazione risorse IPC: memoria condivisa
-    shmid = shmget(IPC_PRIVATE, sizeof(StatoPalestra), IPC_CREAT | 0666);
+    shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | 0666);
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
 
     //Creazione semafori
@@ -78,7 +78,7 @@ int main(int argc, char*argv[]){
 
     //Inizializzazione memoria e creazione coda messaggi
     memset(palestra, 0, sizeof(StatoPalestra));
-    msgid = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
+    msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
 
 
     //Inizializzazione semafori
