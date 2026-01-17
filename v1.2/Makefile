@@ -30,3 +30,11 @@ clean:
  
 #regola usata per evitare possibili conflitti con file chiamati 'clean' o 'all'#
 .PHONY: all clean test_timeout test_explode
+
+#REGOLE CUSTOM#
+
+time: all
+		./manager conf_timeout.conf
+
+expl: all
+		./manager conf_explode.conf
