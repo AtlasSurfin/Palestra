@@ -1,0 +1,99 @@
+#include "common.h"
+#include "config.h"
+
+StatoPalestra *palestra = NULL;
+
+void handle_term(int sig){
+    (void)sig;
+    if(palestra != (void *)-1 && palestra != NULL) shmdt(palestra);
+    _exit(EXIT_SUCCESS);
+}
+
+int main(int argc, char *argv[]){
+
+    //Configurazione segnali
+    struct sigaction sa;
+    sa.sa_handler = handle_term;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
+    
+
+    if(argc < 5){
+        fprintf(stderr, "Uso: %s <shmid> <msgid> <id> <conf_file>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    int shmid = atoi(argv[1]);
+    int msgid = atoi(argv[2]);
+    char *nome_conf = argv[4];
+
+
+    //Carico configurazione
+    Config conf = load_conf(nome_conf);
+
+    //Risorse IPC
+    palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
+    if(palestra == (void *)-1){
+        perror("[EROGATORE] Fallimento attach");
+        exit(EXIT_FAILURE);
+    }
+
+    int semid = semget(SEM_KEY, 2, 0666);
+    if(semid == -1){
+        perror("[EROGATORE] Errore semget");
+        exit(EXIT_FAILURE);
+    }
+    
+    barrier_signal(semid);
+
+    //Contatori per ticket
+    int tkt_counter[NOF_SERVICES] = {0};
+    int ultimo_giorno_visto = -1;
+    struct msg_pacco msg;
+    printf("[EROGATORE] Receptionist automatica pronta.\n");
+
+    while(1){
+        //Controllo giornata per resettare i ticket
+        if(palestra->giorno_corrente > ultimo_giorno_visto){
+            ultimo_giorno_visto = palestra->giorno_corrente;
+            for(int i = 0; i < NOF_SERVICES; i++){ tkt_counter[i] = 0;}
+            printf("[EROGATORE] Inizio giorno %d: contatori ticket resettati.\n", ultimo_giorno_visto + 1);
+        }
+
+        //Resta in attesa di richieste da atleti (mtype = 1)
+        if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 1, 0) == -1){
+            if(errno == EINVAL || errno == EIDRM) break;
+            continue;
+        }
+
+
+        palestra->coda_erogatore++;
+
+        int servizio = msg.service_type;
+        int utente_id = msg.sender_id;
+        
+
+        if(servizio >= 0 && servizio < NOF_SERVICES){
+            //Aumento ticket per quel servizio
+            tkt_counter[servizio]++;
+            int num_assegnato = tkt_counter[servizio];
+
+            printf("[EROGATORE] Atleta %d richiede servizio %d. Assegnato ticket: %d\n", utente_id, servizio, num_assegnato);//
+            palestra->coda_erogatore--;
+
+            //Prepara risposta 
+            msg.mtype = utente_id;
+            msg.sender_id = -1; //-1 = Erogatore risponde
+            msg.tkt_num = num_assegnato;
+            snprintf(msg.testo, TESTO_MAX, "Ticket assegnato: %d - Servizio: %d", num_assegnato, servizio);
+
+            //Invio risposta
+            if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                if(errno == EINVAL || errno == EIDRM) break;
+                perror("[EROGATORE] Errore durante invio risposta");
+            }
+        }
+    }
+    return 0;
+}
