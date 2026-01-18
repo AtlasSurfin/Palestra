@@ -70,6 +70,8 @@ int main(int argc, char *argv[]){
 
         palestra->coda_erogatore++;
 
+        sleep_min(1, conf.n_nano_secs);
+
         int servizio = msg.service_type;
         int utente_id = msg.sender_id;
         
