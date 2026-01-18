@@ -137,7 +137,9 @@ int main(int argc, char*argv[]){
 
         //Assegno servizi e alle postazioni
         for(int i = 0; i < conf.nof_worker_seats; i++){
-            palestra->servizio_postazione[i] = i % NOF_SERVICES;
+            palestra->postazioni[i].servizio_corrente = i % NOF_SERVICES;
+            palestra->postazioni[i].busy = 0;
+            palestra->postazioni[i].id_atleta_serv = 0;
         }
 
         printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
@@ -211,6 +213,8 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 
 void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
+
+    if(palestra) palestra->terminato = 1;
 
     if(palestra != NULL){
         StatServizio report = {0};
