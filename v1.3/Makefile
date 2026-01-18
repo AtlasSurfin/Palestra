@@ -5,7 +5,7 @@ CFLAGS = -Wvla -Wextra -Werror -D_GNU_SOURCE -g  #-g è usato per debugger di VS
 
 LDFLAGS = -lpthread -lncurses
 #nome exe finale
-TARGETS = manager atleta istruttore erogatore add_users dashboard
+TARGETS = manager atleta istruttore erogatore add_users dashboard gym_monitor
 OBJS_COMMON = config.o
 
 #Header files

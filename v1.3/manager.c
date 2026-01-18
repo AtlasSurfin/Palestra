@@ -145,7 +145,30 @@ int main(int argc, char*argv[]){
         printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
 
         //Simuliamo una giornata di 400 minuti (= 8 ore)
-        while(min_trascorsi < 400) pause(); //Aspettiamo il tick del cronometro
+        while(min_trascorsi < 400){                     //usiamo il while per gestire più richieste nello stesso tick
+            pause();        //Aspettiamo il tick del cronometro
+
+            //Controllo se ci sono richieste da add_users
+            struct msg_pacco req_ext;
+            while(msgrcv(msgid, &req_ext, sizeof(struct msg_pacco) - sizeof(long), ENTRY_REQ, IPC_NOWAIT) != -1){
+
+                struct msg_pacco ack;
+                ack.mtype = req_ext.sender_id; //Rispondiamo al PID del chiamante
+                //Se mancano meno di 30 min, richiesta viene negata
+                if(min_trascorsi > 370){
+                    ack.tkt_num = -1;
+                    printf("[MANAGER] Minuto %d: Rifiutato ingresso nuovi atleti (Chiusura imminente).\n", min_trascorsi);
+                }else{
+                    ack.tkt_num = 1;
+                    printf("[MANAGER] Minuto %d: Autorizzato ingresso richiesto da PID %d.\n", min_trascorsi, req_ext.sender_id);
+                }
+
+                //Invio risposta su coda
+                if(msgsnd(msgid, &ack, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                    perror("Errore msgsnd di ack verso add_users");
+                }
+            }
+        } 
 
         printf("[MANAGER] Fine giornata %d. Notifico gli istruttori...\n", g + 1);
 

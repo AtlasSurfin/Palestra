@@ -37,6 +37,10 @@
 #define MUX_STATS 0
 #define BARRIER_SEM 1
 
+//Chiavi usate da add_users
+#define ENTRY_REQ 999 //da add_users a manager
+#define ENTRY_ACK 888 //da manager ad add_users
+
 //Strutture per Statistiche
 typedef struct{
     int serviti_oggi;

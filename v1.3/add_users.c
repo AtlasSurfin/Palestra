@@ -26,15 +26,33 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
 
+    //Fase di "handshake"
+    struct msg_pacco req;
+    req.mtype = ENTRY_REQ;
+    req.sender_id = getpid();
+    req.tkt_num = new_users;
 
-    //Collegamento a mem condivisa
+    printf("[ADD_USERS] Richiesta autorizzazione per %d atleti...\n", new_users);
+    if(msgsnd(msgid, &req, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+        perror("Errore msgsnd di add_users");
+    }
+
+    if(msgrcv(msgid, &req, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+        perror("Errore msgrcv di add_users");
+    }
+
+    if(req.tkt_num == -1){
+        printf("[ADD_USERS] Richiesta respinta dal Manager (Palestra in chiusura).\n");
+        return 0;
+    }
+
+    //Se autorizzato, procedo con collegamento a mem condivisa
     StatoPalestra *palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
     if(palestra == (void *)-1){
         perror("[ADD_USERS] Errore shmat");
         exit(EXIT_FAILURE);
     }
-
-    printf("[ADD_USERS] Sto aggiungendo %d nuovi atleti alla simulazione (Giorno %d)...\n", new_users, palestra->giorno_corrente + 1);
+    printf("[ADD_USERS]Autorizzato ! Sto aggiungendo %d nuovi atleti alla simulazione (Giorno %d)...\n", new_users, palestra->giorno_corrente + 1);
 
     //Fork ed execv atleti
     for(int i = 0; i < new_users; i++){
