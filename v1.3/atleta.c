@@ -61,6 +61,12 @@ int main(int argc, char *argv[]){
     int ultimo_giorno_gestito = -1;
 
     while(1){
+        //Controllo terminazione
+        if(palestra->terminato){
+            printf("[ATLETA %d] Simulazione conclusa. Esco.\n", id_atleta);
+            break;
+        }
+
         //Aspetto inizio nuovo giorno
         while(palestra->giorno_corrente <= ultimo_giorno_gestito) usleep(50000);//100ms di attesa
 

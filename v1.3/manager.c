@@ -14,6 +14,7 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char *conf_file);
 void print_report(StatoPalestra *p, Config c);
 void print_report_tot(StatoPalestra *p, int giorni_effettivi);
 
+
 int min_trascorsi = 0;
 pid_t *atleti_pids = NULL, *istruttori_pids = NULL, pid_cronometro = -1, pid_erogatore = -1, pid_manager;
 int shmid = -1, semid = -1, msgid = -1; //spostate qui per cleanup
@@ -157,15 +158,17 @@ int main(int argc, char*argv[]){
                 //Se mancano meno di 30 min, richiesta viene negata
                 if(min_trascorsi > 370){
                     ack.tkt_num = -1;
-                    printf("[MANAGER] Minuto %d: Rifiutato ingresso nuovi atleti (Chiusura imminente).\n", min_trascorsi);
+                    printf("[MANAGER] Minuto %d: Rifiutato ingresso nuovi atleti (Chiusura imminente) per PID %d.\n", min_trascorsi, req_ext.sender_id);
                 }else{
                     ack.tkt_num = 1;
                     printf("[MANAGER] Minuto %d: Autorizzato ingresso richiesto da PID %d.\n", min_trascorsi, req_ext.sender_id);
                 }
 
                 //Invio risposta su coda
-                if(msgsnd(msgid, &ack, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                while(msgsnd(msgid, &ack, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+                    if(errno == EINTR) continue;
                     perror("Errore msgsnd di ack verso add_users");
+                    break;
                 }
             }
         } 
@@ -237,7 +240,11 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
 
-    if(palestra) palestra->terminato = 1;
+    if(palestra){
+        palestra->terminato = 1;
+        printf("[MANAGER] Fine simulazione segnalata. Attesa chiusura figli...\n");
+        sleep(1);
+    }
 
     if(palestra != NULL){
         StatServizio report = {0};

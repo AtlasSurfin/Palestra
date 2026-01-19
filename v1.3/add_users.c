@@ -5,8 +5,7 @@ int main(int argc, char *argv[]){
 
     //Controllo args
     if(argc < 2){
-        fprintf(stderr, "[ADD_USERS] Errore: specificare n.utenti da aggiungere.\n");
-        fprintf(stderr, "Esempio: %s 5\n", argv[0]);
+        fprintf(stderr, "Uso: %s <n_utenti>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -27,21 +26,25 @@ int main(int argc, char *argv[]){
     }
 
     //Fase di "handshake"
-    struct msg_pacco req;
-    req.mtype = ENTRY_REQ;
-    req.sender_id = getpid();
-    req.tkt_num = new_users;
+    struct msg_pacco invio, ricezione;
+    memset(&invio, 0, sizeof(struct msg_pacco));
 
-    printf("[ADD_USERS] Richiesta autorizzazione per %d atleti...\n", new_users);
-    if(msgsnd(msgid, &req, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
+    invio.mtype = ENTRY_REQ;
+    invio.sender_id = getpid();
+    invio.tkt_num = new_users;
+
+    printf("[ADD_USERS] Richiesta inviata (Type %ld, PID %d)...\n", invio.mtype, invio.sender_id);
+    if(msgsnd(msgid, &invio, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
         perror("Errore msgsnd di add_users");
+        exit(EXIT_FAILURE);
     }
 
-    if(msgrcv(msgid, &req, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+    if(msgrcv(msgid, &ricezione, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
         perror("Errore msgrcv di add_users");
+        exit(EXIT_FAILURE);
     }
 
-    if(req.tkt_num == -1){
+    if(ricezione.tkt_num == -1){
         printf("[ADD_USERS] Richiesta respinta dal Manager (Palestra in chiusura).\n");
         return 0;
     }
@@ -55,6 +58,8 @@ int main(int argc, char *argv[]){
     printf("[ADD_USERS]Autorizzato ! Sto aggiungendo %d nuovi atleti alla simulazione (Giorno %d)...\n", new_users, palestra->giorno_corrente + 1);
 
     //Fork ed execv atleti
+    extern char **environ;
+
     for(int i = 0; i < new_users; i++){
         pid_t pid = fork();
 
@@ -85,10 +90,7 @@ int main(int argc, char *argv[]){
                 NULL
             };
 
-            //Preparo array dell'ambiente (envp)
-            char *n_envp[] = { NULL };
-
-            execve(n_argv[0], n_argv, n_envp);
+            execve(n_argv[0], n_argv, environ);
 
             perror("[ADD_USERS] Errore execve");
             exit(EXIT_FAILURE);
