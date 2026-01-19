@@ -19,7 +19,7 @@ int main(int argc, char *argv[]){
     //Aggancio a risorse IPC esistenti
     int shmid = shmget(SHM_KEY, sizeof(StatoPalestra), 0666);
     int semid = semget(SEM_KEY, 2, 0666);
-    int msgid = (MSG_KEY, 0666);
+    int msgid = msgget(MSG_KEY, 0666);
 
     if(shmid == -1 || semid == -1 || msgid == -1){
         perror("[ADD_USERS] Impossibile agganciarsi a risorse IPC. Palestra è attiva ?");
@@ -68,6 +68,9 @@ int main(int argc, char *argv[]){
             /*Usiamo buffer da 16 e non da 12 per evitare eventuali buffer overflow
             Ma soprattutto perchè con chiavi definite potremmo avere valori più grandi*/
 
+
+            printf("[DEBUG] SHMID: %d, MSGID: %d\n", shmid, msgid);
+            
             sprintf(s_shmid, "%d", shmid);
             sprintf(s_msgid, "%d", msgid);
             sprintf(s_id, "%d", 900 + i);

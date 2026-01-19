@@ -1,8 +1,8 @@
 #include "common.h"
 #include "config.h"
 
-#define QUEUE_LIMIT 5
-#define LOST_LIMIT 10
+#define QUEUE_LIMIT 1
+#define LOST_LIMIT 1
 
 int main(int argc, char *argv[]){
     char *nome_conf = (argc > 1) ? argv[1]: "conf_timeout.conf";
