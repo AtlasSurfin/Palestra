@@ -146,8 +146,9 @@ int main(int argc, char*argv[]){
         printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
 
         //Simuliamo una giornata di 400 minuti (= 8 ore)
-        while(min_trascorsi < 400){                     //usiamo il while per gestire più richieste nello stesso tick
+        while(min_trascorsi < 400){   //usiamo il while per gestire più richieste nello stesso tick
             pause();        //Aspettiamo il tick del cronometro
+            if(palestra->terminato) break; //controllo che se la palestra è ancora attivo
 
             //Controllo se ci sono richieste da add_users
             struct msg_pacco req_ext;
@@ -239,60 +240,40 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 
 void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
+    //Ignoriamo SIGTERM
+    struct sigaction sa;
+    sa.sa_handler = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
 
-    if(palestra){
-        palestra->terminato = 1;
-        printf("[MANAGER] Fine simulazione segnalata. Attesa chiusura figli...\n");
-        sleep(1);
-    }
+    if(palestra) palestra->terminato = 1;
+
+    printf("[MANAGER] Chiusura simulazione (Causa: %s)...\n", causa_chiusura);
+
+    kill(0, SIGTERM);
 
     if(palestra != NULL){
-        StatServizio report = {0};
-        for(int i = 0; i < NOF_SERVICES; i++){
-            report.serviti_tot += palestra->stats[i].serviti_tot;
-            report.non_serviti_tot += palestra->stats[i].non_serviti_tot;
-            report.tempo_attesa_tot += palestra->stats[i].tempo_attesa_tot;
-        }
-
-        int giorni_svolti = palestra->giorno_corrente + 1;
-        printf("\n[MANAGER] Salvataggio statistiche finali...\n");
-        save_stats(palestra, &report, conf);
-        print_report_tot(palestra, giorni_svolti);
-
+        save_stats(palestra, NULL, conf);
+        print_report_tot(palestra, palestra ->giorno_corrente + 1);
     }
 
-    printf("\n[MANAGER] Tempo scaduto, è ora di chiudere. Pulizia risorse ...\n");
-    printf("Causa Terminazione: %s\n", causa_chiusura);
+    sleep(1);
 
-    //Ferma atleti
-    if(atleti_pids){
-        for(int i = 0; i < conf.nof_users; i++){
-            if(atleti_pids[i] > 0) kill(atleti_pids[i], SIGTERM);
-        }
-        free(atleti_pids);
-    }
-
-    //Ferma istruttori
-    if(istruttori_pids != NULL){
-        for(int i = 0; i < conf.nof_workers; i++){
-            if(istruttori_pids[i] > 0) kill(istruttori_pids[i], SIGTERM);
-        }
-        free(istruttori_pids);
-    }
-
-    //Ferma cronometro
-    if(pid_cronometro > 0) kill(pid_cronometro, SIGTERM);
-    if(pid_erogatore > 0) kill(pid_erogatore, SIGTERM);
-
-    if(palestra){
-        if(semid != -1) semctl(semid, 0, IPC_RMID);
-        shmdt(palestra);
-    }
-    if(shmid != -1) shmctl(shmid, IPC_RMID, NULL);
+    
     if(msgid != -1) msgctl(msgid, IPC_RMID, NULL);
-    printf("[MANAGER] Risorse pulite correttamente. Alla prossima !\n");
+    if(semid != -1) semctl(semid, 0, IPC_RMID);
+    if(shmid != -1){
+        shmdt(palestra);
+        shmctl(shmid, IPC_RMID, NULL);
+    }
 
+    if(atleti_pids) free(atleti_pids);
+    if(istruttori_pids) free(istruttori_pids);
+
+    printf("[MANAGER] Risorse pulite correttamente. A domani !\n");
     exit(EXIT_SUCCESS);
+
 
 }
 
