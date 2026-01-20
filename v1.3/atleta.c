@@ -98,7 +98,14 @@ int main(int argc, char *argv[]){
                 if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
 
                 //Ricezione ticket
-                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1) break;
+                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+                    if(errno == EIDRM || errno == EINVAL){
+                        shmdt(palestra);
+                        exit(EXIT_SUCCESS);
+                    }
+
+                    break;
+                }
 
                 printf("[ATLETA %d] Vado ! Preso il ticket %d per servizio %d (%d/%d)\n", 
                         id_atleta, msg.tkt_num, servizio, r + 1, n_richieste);
@@ -107,7 +114,14 @@ int main(int argc, char *argv[]){
                 msg.mtype = 10 + servizio; //mtype speciale 
                 msg.sender_id = getpid();
                 if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
-                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1) break;
+                if(msgrcv(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
+                    if(errno == EIDRM || errno == EINVAL){
+                        shmdt(palestra);
+                        exit(EXIT_SUCCESS);
+                    }
+
+                    break;
+                }
 
                 printf("[ATLETA %d] Servizio %d completato. Passo al prossimo...\n", id_atleta, servizio);
             }
