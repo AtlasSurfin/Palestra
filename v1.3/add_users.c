@@ -97,7 +97,15 @@ int main(int argc, char *argv[]){
         }
     }
     shmdt(palestra);
+
     printf("%d atleti aggiunti con successo.\n", new_users);
+    printf("[ADD_USERS] In attesa della fine della loro attività...\n");
+
+    for(int i = 0; i < new_users; i++){
+        wait(NULL);
+    }
+
+    printf("[ADD_USERS] Tutti i miei atleti sono usciti. Alla prossima !\n");
     return 0;
 
 }

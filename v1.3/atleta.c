@@ -68,7 +68,13 @@ int main(int argc, char *argv[]){
         }
 
         //Aspetto inizio nuovo giorno
-        while(palestra->giorno_corrente <= ultimo_giorno_gestito) usleep(50000);//100ms di attesa
+        while(palestra->giorno_corrente <= ultimo_giorno_gestito){
+            if(palestra->terminato){
+                shmdt(palestra);
+                exit(EXIT_SUCCESS);
+            }
+             usleep(50000);//100ms di attesa
+        }
 
             ultimo_giorno_gestito = palestra->giorno_corrente;
             double daily_thres = (double)rand() / RAND_MAX;
@@ -132,8 +138,8 @@ int main(int argc, char *argv[]){
             
 fine_giornata:
             while(palestra->giorno_corrente == ultimo_giorno_gestito){
+                if(palestra->terminato) break; //Esco per andare al controllo di terminazione (main loop)
                 usleep(100000);
-                if(palestra->giorno_corrente == -1) break;
             }
             //Fine allenamento
         }

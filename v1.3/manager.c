@@ -240,36 +240,53 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 
 void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
-    //Ignoriamo SIGTERM
-    struct sigaction sa;
-    sa.sa_handler = SIG_IGN;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGTERM, &sa, NULL);
 
     if(palestra) palestra->terminato = 1;
 
     printf("[MANAGER] Chiusura simulazione (Causa: %s)...\n", causa_chiusura);
 
-    kill(0, SIGTERM);
+    //Invia SIGTERM ai figli diretti
+    if(atleti_pids){
+        for(int i = 0; i < conf.nof_users; i++) kill(atleti_pids[i], SIGTERM);
+    }
 
+    if(istruttori_pids){
+        for(int j = 0; j < conf.nof_workers; j++) kill(istruttori_pids[j], SIGTERM);
+    }
+
+    if(pid_erogatore > 0) kill(pid_erogatore, SIGTERM);
+    if(pid_cronometro > 0) kill(pid_cronometro, SIGTERM);
+
+    //Aspetta i figli
+
+    if(atleti_pids){
+        for(int i = 0; i < conf.nof_users; i++) waitpid(atleti_pids[i], NULL, 0);
+        free(atleti_pids);
+    }
+
+    if(istruttori_pids){
+        for(int i = 0; i < conf.nof_workers; i++) waitpid(istruttori_pids[i], NULL, 0);
+        free(istruttori_pids);
+    }
+    
+    if(pid_erogatore > 0) waitpid(pid_erogatore, NULL, 0);
+    if(pid_cronometro > 0) waitpid(pid_cronometro, NULL, 0);
+
+
+    //Salvo stats e rimuovo risorse IPC
     if(palestra != NULL){
         save_stats(palestra, NULL, conf);
         print_report_tot(palestra, palestra ->giorno_corrente + 1);
     }
 
-    sleep(1);
 
-    
     if(msgid != -1) msgctl(msgid, IPC_RMID, NULL);
     if(semid != -1) semctl(semid, 0, IPC_RMID);
     if(shmid != -1){
         shmdt(palestra);
         shmctl(shmid, IPC_RMID, NULL);
     }
-
-    if(atleti_pids) free(atleti_pids);
-    if(istruttori_pids) free(istruttori_pids);
+    
 
     printf("[MANAGER] Risorse pulite correttamente. A domani !\n");
     exit(EXIT_SUCCESS);
