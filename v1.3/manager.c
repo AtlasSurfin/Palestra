@@ -132,6 +132,18 @@ int main(int argc, char*argv[]){
     //Logica a giornate
     int g;
     for(g = 0; g < conf.sim_duration; g++){
+        //Reset stats per giorno succ. (per monitor)
+
+        sem_p(semid, MUX_STATS);
+        for(int i = 0; i < NOF_SERVICES; i++){
+            palestra->stats[i].serviti_oggi = 0;
+            palestra->stats[i].non_serviti_oggi= 0;
+            palestra->stats[i].tempo_attesa_oggi = 0;
+            palestra->stats[i].tempo_erogazione_oggi = 0;
+        }
+        sem_v(semid, MUX_STATS);
+
+        //Aggiorno i contatori (per il monitor)
         palestra->giorno_corrente = g;
         palestra->min_correnti = 0;
         min_trascorsi = 0;
@@ -211,17 +223,6 @@ int main(int argc, char*argv[]){
             strncpy(causa_chiusura, "EXPLODE", 20);
             break;
         }
-
-        //Reset stats per giorno succ.
-
-        sem_p(semid, MUX_STATS);
-        for(int i = 0; i < NOF_SERVICES; i++){
-            palestra->stats[i].serviti_oggi = 0;
-            palestra->stats[i].non_serviti_oggi= 0;
-            palestra->stats[i].tempo_attesa_oggi = 0;
-            palestra->stats[i].tempo_erogazione_oggi = 0;
-        }
-        sem_v(semid, MUX_STATS);
  }
 
     cleanup();
