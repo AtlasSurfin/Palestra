@@ -39,13 +39,33 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    if(msgrcv(msgid, &ricezione, sizeof(struct msg_pacco) - sizeof(long), getpid(), 0) == -1){
-        perror("Errore msgrcv di add_users");
+    time_t start_wait  = time(NULL);
+    int ricevuto = 0;
+    while(time(NULL) - start_wait < 5){
+        if(msgrcv(msgid, &ricezione, sizeof(struct msg_pacco) - sizeof(long), getpid(), IPC_NOWAIT) != -1){
+            ricevuto = 1;
+            break;
+        }
+
+        if(errno == ENOMSG){
+            usleep(100000);
+            continue;
+        }else if(errno == EINTR){
+            continue;
+        }else{
+            perror("[ADD_USERS] Errore critico msgrcv");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+
+    if(!ricevuto){
+        fprintf(stderr, "[ADD_USERS] ERRORE: Il Manager non ha risposto entro 5 secondi. Esco per sicurezza.\n");
         exit(EXIT_FAILURE);
     }
 
     if(ricezione.tkt_num == -1){
-        printf("[ADD_USERS] Richiesta respinta dal Manager (Palestra in chiusura).\n");
+        printf("[ADD_USERS] Richiesta respinta dal Manager (Palestra in chiusura o troppa coda).\n");
         return 0;
     }
 
@@ -55,14 +75,13 @@ int main(int argc, char *argv[]){
         perror("[ADD_USERS] Errore shmat");
         exit(EXIT_FAILURE);
     }
-    printf("[ADD_USERS]Autorizzato ! Sto aggiungendo %d nuovi atleti alla simulazione (Giorno %d)...\n", new_users, palestra->giorno_corrente + 1);
+    printf("[ADD_USERS] Autorizzato ! Sto aggiungendo %d nuovi atleti alla simulazione (Giorno %d)...\n", new_users, palestra->giorno_corrente + 1);
 
     //Fork ed execv atleti
     extern char **environ;
 
     for(int i = 0; i < new_users; i++){
         pid_t pid = fork();
-
         if(pid < 0){
             perror("[ADD_USERS] Errore fork");
             break;
@@ -101,6 +120,7 @@ int main(int argc, char *argv[]){
     printf("%d atleti aggiunti con successo.\n", new_users);
     printf("[ADD_USERS] In attesa della fine della loro attività...\n");
 
+    //Aspetto che tutti i nuovi atleti terminino
     for(int i = 0; i < new_users; i++){
         wait(NULL);
     }

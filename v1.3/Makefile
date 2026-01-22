@@ -15,6 +15,10 @@ HEADERS = common.h config.h
 
 all: $(TARGETS)
 
+#Regola per l'oggetto comune (importante per modifiche a config.c)
+config.o: config.c config.h
+		$(CC) $(CFLAGS) -c config.c -o config.o
+
 #In generale compila tutti i file.c in .o, ricompila se cambia un header#
 %.o: %.c $(HEADERS)
 		$(CC) $(CFLAGS) -c $< -o $@
@@ -26,7 +30,16 @@ $(TARGETS): %: %.o $(OBJS_COMMON)
 
 #rimuove file.o ed exe per ripartire da zero #
 clean:
-		rm -f *.o $(TARGETS) stats_simulazione.csv
+		rm -f *.o $(TARGETS) stats_simulazione.csv palestra_att.log
+		@echo "Pulizia file completata."
+
+#Funzione cleaner per le risorse IPC
+wipe:
+		@echo "Rimozione code, semafori e memorie condivise..."
+		ipcs -q | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -q
+		ipcs -s | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -s
+		ipcs -m | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -m
+		@echo "Risorse IPC ripulite."
  
 #regola usata per evitare possibili conflitti con file chiamati 'clean' o 'all'#
 .PHONY: all clean time expl

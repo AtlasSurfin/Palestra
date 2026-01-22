@@ -40,6 +40,7 @@
 //Chiavi usate da add_users
 #define ENTRY_REQ 999 //da add_users a manager
 #define ENTRY_ACK 888 //da manager ad add_users
+#define ALERT_RESOURCES 777 ///Messaggio speciale da gym_monitor a manager
 
 //Strutture per Statistiche
 typedef struct{

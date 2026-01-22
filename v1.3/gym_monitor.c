@@ -2,7 +2,7 @@
 #include "config.h"
 
 #define QUEUE_LIMIT 40
-#define LOST_LIMIT 60
+#define LOST_LIMIT 45
 
 int main(int argc, char *argv[]){
 
@@ -57,9 +57,17 @@ int main(int argc, char *argv[]){
         //Analisi coda messagi
         struct msqid_ds q_stat;
         if(msgid != -1 && msgctl(msgid, IPC_STAT, &q_stat) != -1){
-            if(q_stat.msg_qnum > 25){
+            if(q_stat.msg_qnum > 50){
                 printf("[CRITICAL] Rischio perdita servizi: %ld richieste in attesa di istruttore ! \n", q_stat.msg_qnum);
                 issues++;
+                printf("[MONITOR] Soglia superata ! Chiedo rinforzi al manager...\n");
+
+                struct msg_pacco alert;
+                alert.mtype = ALERT_RESOURCES;
+                alert.sender_id = getpid();
+                alert.service_type = q_stat.msg_qnum; //Qui passo il numero di messaggi
+
+                if(msgsnd(msgid, &alert, sizeof(struct msg_pacco) - sizeof(long), IPC_NOWAIT) == -1) perror("[MONITOR] Errore invio alert al Manager");
             }
         }
 

@@ -39,22 +39,16 @@ void handle_tick(int sig){
 
 int main(int argc, char*argv[]){
     //Leggo da file di configurazione
-    char *nome_conf;
-    if(argc > 1){
-        nome_conf = argv[1];
-        printf("[MANAGER] Uso file.conf da riga di comando: %s\n", nome_conf);
-    }else{
-        nome_conf = "conf_timeout.conf";
-        printf("[MANAGER] Nessun file.conf da riga di comando. Uso valore default: %s\n", nome_conf);
-    }
+    char *nome_conf = (argc > 1) ? argv[1] : "conf_timeout.conf";
+    printf("[MANAGER] Uso file: %s\n", nome_conf); 
 
     conf = load_conf(nome_conf);
     pid_manager = getpid();
     int n_figli = conf.nof_workers + conf.nof_users + 1;
 
-    struct sigaction sa;
 
     //Configurazione per SIGUSR1
+    struct sigaction sa;
     sa.sa_handler = handle_tick;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
@@ -100,10 +94,18 @@ int main(int argc, char*argv[]){
     atleti_pids = malloc(sizeof(pid_t) * conf.nof_users);
     istruttori_pids = malloc(sizeof(pid_t) * conf.nof_workers);
 
+    if(!atleti_pids || !istruttori_pids){
+        perror("Errore malloc iniziale");
+        exit(EXIT_FAILURE);
+    }
+
     //Lancio Istruttori
     for(int i = 0; i < conf.nof_workers; i++){
         if((istruttori_pids[i] = fork()) == 0) lancia_processo("./istruttore", i, shmid, msgid, nome_conf);
     }
+
+    //Aggiornamento contatore
+    palestra->totale_operatori_attivi = conf.nof_workers;
 
     //Lancio Atleti
     for(int i = 0; i < conf.nof_users; i++){
@@ -112,7 +114,6 @@ int main(int argc, char*argv[]){
 
     //Barriera di Inizializzazione
     printf("[MANAGER] Attesa inizializzazione %d processi figli...\n", n_figli);
-
     struct sembuf wait_op = {BARRIER_SEM, -1, 0}; //Operazione p
     for(int i = 0; i < n_figli; i++){
         if(semop(semid, &wait_op, 1) == -1) perror("[MANAGER] Errore semop barriera\n");
@@ -120,7 +121,7 @@ int main(int argc, char*argv[]){
 
 
     printf("[MANAGER] Tutti i processi sono allineati. Inizio simulazione !\n");
-
+    
     //Cronometro
     if((pid_cronometro = fork()) == 0){
         while(1){
@@ -131,7 +132,11 @@ int main(int argc, char*argv[]){
 
     //Logica a giornate
     int g;
+    extern char **environ;
     for(g = 0; g < conf.sim_duration; g++){
+        palestra->giorno_corrente = g;
+        min_trascorsi = 0;
+
         //Reset stats per giorno succ. (per monitor)
 
         sem_p(semid, MUX_STATS);
@@ -143,10 +148,7 @@ int main(int argc, char*argv[]){
         }
         sem_v(semid, MUX_STATS);
 
-        //Aggiorno i contatori (per il monitor)
-        palestra->giorno_corrente = g;
-        palestra->min_correnti = 0;
-        min_trascorsi = 0;
+        printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
 
         //Assegno servizi e alle postazioni
         for(int i = 0; i < conf.nof_worker_seats; i++){
@@ -155,7 +157,7 @@ int main(int argc, char*argv[]){
             palestra->postazioni[i].id_atleta_serv = 0;
         }
 
-        printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
+        
 
         //Simuliamo una giornata di 400 minuti (= 8 ore)
         while(min_trascorsi < 400){   //usiamo il while per gestire più richieste nello stesso tick
@@ -184,11 +186,54 @@ int main(int argc, char*argv[]){
                     break;
                 }
             }
-        } 
+
+            //Gestione Alert da gym_monitor (creazione dinamica)
+            struct msg_pacco alert_req;
+            if(msgrcv(msgid, &alert_req, sizeof(struct msg_pacco) - sizeof(long), ALERT_RESOURCES, IPC_NOWAIT) != -1){
+                int pending_msgs = alert_req.service_type;
+
+                int da_creare = (pending_msgs / 20);
+                if(da_creare > 3) da_creare = 3;
+                if(da_creare == 0) da_creare = 1;
+
+                printf("[MANAGER] Alert ! %d messaggi in coda ! Creazione di %d nuovi istruttori...\n", pending_msgs, da_creare);
+
+                for(int k = 0; k < da_creare; k++){
+                    pid_t p_new = fork();
+
+                    if(p_new < 0){
+                        perror("[MANAGER] Errore fork istruttore dinamico");
+                        break;
+                    }
+
+                    if(p_new == 0){
+                        char s_shmid[16], s_msgid[16], s_idx[16];
+
+                        sprintf(s_shmid, "%d", shmid);
+                        sprintf(s_msgid, "%d", msgid);
+                        sprintf(s_idx, "%d", conf.nof_workers + palestra->totale_operatori_attivi + 100);
+
+                        char *args[] = {"./istruttore", s_shmid, s_msgid, s_idx, nome_conf, NULL};
+                        execve(args[0], args, environ);
+                        exit(EXIT_FAILURE);
+                    }else if(p_new > 0){
+                        palestra->totale_operatori_attivi++;
+                        pid_t *temp = realloc(istruttori_pids, palestra->totale_operatori_attivi * sizeof(pid_t));
+
+                        if(temp){
+                            istruttori_pids = temp;
+                            istruttori_pids[palestra->totale_operatori_attivi - 1] = p_new;
+                            printf("[MANAGER] Istruttore extra %d aggiunto (Tot: %d).\n", p_new, palestra->totale_operatori_attivi);
+                        }
+                    }
+                }
+            }
+        }
+         
 
         printf("[MANAGER] Fine giornata %d. Notifico gli istruttori...\n", g + 1);
 
-        for(int i = 0; i < conf.nof_workers; i++){
+        for(int i = 0; i < palestra->totale_operatori_attivi; i++){
             if(istruttori_pids[i] > 0) kill(istruttori_pids[i], SIGUSR2);
         }
 
@@ -241,37 +286,42 @@ void lancia_processo(char *path, int id, int shmid, int msgid, char* conf_file){
 
 void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
-
     if(palestra) palestra->terminato = 1;
 
     printf("[MANAGER] Chiusura simulazione (Causa: %s)...\n", causa_chiusura);
 
     //Invia SIGTERM ai figli diretti
     if(atleti_pids){
-        for(int i = 0; i < conf.nof_users; i++) kill(atleti_pids[i], SIGTERM);
+        for(int i = 0; i < conf.nof_users; i++){
+            if(atleti_pids[i] > 0) kill(atleti_pids[i], SIGTERM);
+        }
     }
 
     if(istruttori_pids){
-        for(int j = 0; j < conf.nof_workers; j++) kill(istruttori_pids[j], SIGTERM);
+        for(int j = 0; j < palestra->totale_operatori_attivi; j++){
+            if(istruttori_pids[j] > 0) kill(istruttori_pids[j], SIGTERM);
+        } 
     }
 
     if(pid_erogatore > 0) kill(pid_erogatore, SIGTERM);
     if(pid_cronometro > 0) kill(pid_cronometro, SIGTERM);
 
-    //Aspetta i figli
+    //Ciclo di attesa non bloccante, per gestire eventuali zombie
+    printf("[MANAGER] Raccolta processi figli in corso. Attendere prego...\n");
+    int status;
+    pid_t died_pid;
+    int attempts = 0;
 
-    if(atleti_pids){
-        for(int i = 0; i < conf.nof_users; i++) waitpid(atleti_pids[i], NULL, 0);
-        free(atleti_pids);
+    while((died_pid = waitpid(-1, &status, WNOHANG)) != -1){
+        if(died_pid == 0){
+             usleep(1000);
+             attempts++;
+             if(attempts > 100) break; //Timeout di sicurezza dopo 1 secondo circa
+        }else{
+            //processo figlio "raccolto", resetto i tentativi
+            attempts = 0;
+        }
     }
-
-    if(istruttori_pids){
-        for(int i = 0; i < conf.nof_workers; i++) waitpid(istruttori_pids[i], NULL, 0);
-        free(istruttori_pids);
-    }
-    
-    if(pid_erogatore > 0) waitpid(pid_erogatore, NULL, 0);
-    if(pid_cronometro > 0) waitpid(pid_cronometro, NULL, 0);
 
 
     //Salvo stats e rimuovo risorse IPC
@@ -279,6 +329,10 @@ void cleanup(){
         save_stats(palestra, NULL, conf);
         print_report_tot(palestra, palestra ->giorno_corrente + 1);
     }
+
+    //Dealloco la memoria locale
+    if(atleti_pids) free(atleti_pids);
+    if(istruttori_pids) free(istruttori_pids);
 
 
     if(msgid != -1) msgctl(msgid, IPC_RMID, NULL);
