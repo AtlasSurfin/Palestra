@@ -55,17 +55,44 @@ int main(int argc, char*argv[]){
     sigaction(SIGUSR1, &sa, NULL);
 
     //Configurazione per SIGINT
-    sa.sa_handler = handle_int;
-    sa.sa_flags = 0;
-    sigaction(SIGINT, &sa, NULL);
+    struct sigaction sa_int;
+    sa_int.sa_handler = handle_int;
+    sigemptyset(&sa_int.sa_mask);
+    sa_int.sa_flags = 0;
+    sigaction(SIGINT, &sa_int, NULL);
 
+
+    //Inizio blocco di auto-pulizia preventiva
+    printf("[MANAGER] Inizio pulizia preventiva ...\n");
+    system("pkill -9 istruttore 2>/dev/null");
+    system("pkill -9 atleta 2>/dev/null");
+    system("pkill -9 erogatore 2>/dev/null");
+    system("pkill -9 cronometro 2>/dev/null");
+    sleep(1);
+    printf("[MANAGER] Pulizia completata. Nessun processo orfano rilevato.\n");
 
     //Creazione risorse IPC: memoria condivisa
-    shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | 0666);
+    shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | IPC_EXCL | 0666);
+    if(shmid == -1 && errno == EEXIST){
+        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        int old_shmid = shmget(SHM_KEY, sizeof(StatoPalestra), 0666);
+        shmctl(old_shmid, IPC_RMID, NULL);
+
+        //Riprovo la creazione
+        shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | 0666);
+    }
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
 
     //Creazione semafori
-    semid  = semget(SEM_KEY, 2, IPC_CREAT | 0666);
+    semid  = semget(SEM_KEY, 2, IPC_CREAT | IPC_EXCL | 0666);
+    if(semid == -1 && errno == EEXIST){
+        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        int old_semid = semget(SEM_KEY, 2, 0666);
+        semctl(old_semid, 0, IPC_RMID);
+
+        //Riprovo la creazione
+        semid = semget(SEM_KEY, 2, IPC_CREAT | 0666);
+    }
     if(semid == -1){
         perror("Errore semget");
         exit(EXIT_FAILURE);
@@ -73,7 +100,15 @@ int main(int argc, char*argv[]){
 
     //Inizializzazione memoria e creazione coda messaggi
     memset(palestra, 0, sizeof(StatoPalestra));
-    msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
+    msgid = msgget(MSG_KEY, IPC_CREAT | IPC_EXCL | 0666);
+    if(msgid == -1 && errno == EEXIST){
+        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        int old_msgid = msgget(MSG_KEY, 0666);
+        msgctl(old_msgid, IPC_RMID, NULL);
+
+        //Riprovo la creazione
+        msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
+    }
 
     palestra->terminato = 0;
     palestra->coda_erogatore = 0;
@@ -162,7 +197,9 @@ int main(int argc, char*argv[]){
         //Simuliamo una giornata di 400 minuti (= 8 ore)
         while(min_trascorsi < 400){   //usiamo il while per gestire più richieste nello stesso tick
             pause();        //Aspettiamo il tick del cronometro
+            while(waitpid(-1, NULL, WNOHANG) > 0); //Controllo per aspettare eventuali processi "zombie" (versione non bloccante)
             if(palestra->terminato) break; //controllo che se la palestra è ancora attivo
+            
 
             //Controllo se ci sono richieste da add_users
             struct msg_pacco req_ext;
