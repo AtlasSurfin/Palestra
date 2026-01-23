@@ -1,6 +1,8 @@
 #include "common.h"
 #include "config.h"
 
+#define LOG_SRC "EROGATORE"
+
 StatoPalestra *palestra = NULL;
 
 void handle_term(int sig){
