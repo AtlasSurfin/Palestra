@@ -30,19 +30,23 @@ $(TARGETS): %: %.o $(OBJS_COMMON)
 
 #rimuove file.o ed exe per ripartire da zero #
 clean:
-		rm -f *.o $(TARGETS) stats_simulazione.csv palestra_att.log
+		rm -f *.o $(TARGETS) stats_simulazione.csv
 		@echo "Pulizia file completata."
+	
+clean_all:
+		rm -f *.o $(TARGETS) stats_simulazione.csv palestra_sim.log
+		@echo "Pulizia file totale completata."
 
 #Funzione cleaner per le risorse IPC
 wipe:
 		@echo "Rimozione code, semafori e memorie condivise..."
-		ipcs -q | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -q
-		ipcs -s | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -s
-		ipcs -m | grep 'whoami' | awk '{print $$2}' | xargs -r ipcrm -m
+		ipcs -q | grep $(USER) | awk '{print $$2}' | xargs -r ipcrm -q
+		ipcs -s | grep $(USER) | awk '{print $$2}' | xargs -r ipcrm -s
+		ipcs -m | grep $(USER) | awk '{print $$2}' | xargs -r ipcrm -m
 		@echo "Risorse IPC ripulite."
  
 #regola usata per evitare possibili conflitti con file chiamati 'clean' o 'all'#
-.PHONY: all clean time expl
+.PHONY: all clean clean_all wipe time expl 
 
 #REGOLE CUSTOM#
 

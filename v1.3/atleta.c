@@ -2,6 +2,8 @@
 #include "config.h"
 #include <signal.h>
 
+#define LOG_SRC "ATLETA"
+
 StatoPalestra *palestra = NULL;
 
 
@@ -33,7 +35,8 @@ int main(int argc, char *argv[]){
     //Recupero ID passati dal manager come stringhe
     int shmid = atoi(argv[1]);
     int msgid = atoi(argv[2]);
-    int id_atleta = getpid();
+    int id_atleta = atoi(argv[3]);
+    
 
     //Risorse IPC
     palestra = (StatoPalestra *)shmat(shmid, NULL, 0);
@@ -63,7 +66,7 @@ int main(int argc, char *argv[]){
     while(1){
         //Controllo terminazione
         if(palestra->terminato){
-            printf("[ATLETA %d] Simulazione conclusa. Esco.\n", id_atleta);
+            make_log("Atleta %d: Simulazione conclusa. Esco.\n", id_atleta);
             break;
         }
 
@@ -73,7 +76,7 @@ int main(int argc, char *argv[]){
                 shmdt(palestra);
                 exit(EXIT_SUCCESS);
             }
-             usleep(50000);//100ms di attesa
+             usleep(200000);//100ms di attesa
         }
 
             ultimo_giorno_gestito = palestra->giorno_corrente;
@@ -82,12 +85,13 @@ int main(int argc, char *argv[]){
             //Decido se venire in palestra oggi
             if(daily_thres < p_serv){
                 int n_richieste = (rand() % conf.n_requests) + 1;
-                printf("[ATLETA %d] Giorno %d: Entro con una lista di %d servizi.\n", id_atleta, ultimo_giorno_gestito + 1, n_richieste);
-                for(int r = 0; r < n_richieste; r++){
+                make_log("Atleta %d: Giorno %d: Entro con una lista di %d servizi.\n", id_atleta, ultimo_giorno_gestito + 1, n_richieste);
+                int r;
+                for(r = 0; r < n_richieste; r++){
                     
                     //Controllo se la giornata è finita mentre ero occupato
                     if(palestra->min_correnti >= 390){
-                        printf("[ATLETA %d] Troppo tardi per il servizio %d/%d, vado a casa...\n", id_atleta, r + 1, n_richieste);
+                        make_log("Atleta %d: Troppo tardi per il servizio %d/%d, vado a casa...\n", id_atleta, r + 1, n_richieste);
                         break;
                     }
 
@@ -97,9 +101,10 @@ int main(int argc, char *argv[]){
                 //Richiesta ticket all'erogatore
                 msg.mtype = 1; //Richieste per erogatore
                 msg.sender_id = getpid();
+                msg.min_inizio_attesa = palestra->min_correnti;
                 msg.service_type = servizio;
                 msg.tkt_num = 0;
-                msg.min_inizio_attesa = palestra->min_correnti;
+                
 
                 if(msgsnd(msgid, &msg, sizeof(struct msg_pacco) - sizeof(long), 0) == -1) break;
 
@@ -113,7 +118,7 @@ int main(int argc, char *argv[]){
                     break;
                 }
 
-                printf("[ATLETA %d] Vado ! Preso il ticket %d per servizio %d (%d/%d)\n", 
+                make_log("Atleta %d: Vado ! Preso il ticket %d per servizio %d (%d/%d)\n", 
                         id_atleta, msg.tkt_num, servizio, r + 1, n_richieste);
 
                 //Entrata in coda servizio
@@ -129,11 +134,13 @@ int main(int argc, char *argv[]){
                     break;
                 }
 
-                printf("[ATLETA %d] Servizio %d completato. Passo al prossimo...\n", id_atleta, servizio);
-            }
+                make_log("Atleta %d: Servizio %d completato. Passo al prossimo...\n", id_atleta, servizio);
+                }
+
+            make_log("Atleta %d: Allenamento terminato. Servizi eseguiti: %d. Torno negli spogliatoi.\n", id_atleta, r);
 
         }else{
-                printf("[ATLETA %d] Giorno %d: Oggi resto a casa\n", id_atleta, ultimo_giorno_gestito + 1);
+                make_log("Atleta %d: Giorno %d: Oggi resto a casa\n", id_atleta, ultimo_giorno_gestito + 1);
         }                
             
 fine_giornata:
@@ -141,7 +148,7 @@ fine_giornata:
                 if(palestra->terminato) break; //Esco per andare al controllo di terminazione (main loop)
                 usleep(100000);
             }
-            //Fine allenamento
+            //Fine ciclo
         }
         return 0;
 }

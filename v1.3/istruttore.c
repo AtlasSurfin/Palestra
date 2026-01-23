@@ -2,6 +2,8 @@
 #include "config.h"
 #include <errno.h>
 
+#define LOG_SRC "ISTRUTTORE"
+
 StatoPalestra *palestra = NULL;
 
 void handle_term(int sig){
@@ -61,7 +63,7 @@ int main(int argc, char *argv[]){
 
     barrier_signal(semid);
 
-    printf("[ISTRUTTORE %d] Pronto. Mansione corrente: Servizio %d\n", id_istruttore, mio_servizio);
+    make_log("Istruttore %d Pronto. Mansione corrente: Servizio %d\n", id_istruttore, mio_servizio);
 
     while(1){
         //Attesa nuova giornata
@@ -79,7 +81,7 @@ int main(int argc, char *argv[]){
         }
 
         if(mia_postazione == -1){
-            printf("[ISTRUTTORE %d] Giorno %d: Servizio %d non richiesto. Oggi riposo.\n", id_istruttore, g + 1, mio_servizio);
+            make_log("Istruttore %d: Giorno %d: Servizio %d non richiesto. Oggi riposo.\n", id_istruttore, g + 1, mio_servizio);
             //Salto a fine giornata
             while(palestra->min_correnti < 400 && palestra->giorno_corrente == g) usleep(500000);
             continue;
@@ -90,7 +92,7 @@ int main(int argc, char *argv[]){
         palestra->totale_operatori_attivi++;
         sem_v(semid, MUX_STATS);
 
-        printf("[ISTRUTTORE %d] Al lavoro (Postazione %d, Servizio %d)\n", id_istruttore, mia_postazione, mio_servizio);
+        make_log("Istruttore %d: Al lavoro ! (Postazione %d, Servizio %d)\n", id_istruttore, mia_postazione, mio_servizio);
         palestra->postazioni[mia_postazione].busy = 0;
         palestra->postazioni[mia_postazione].id_atleta_serv = 0;
 
@@ -115,7 +117,7 @@ int main(int argc, char *argv[]){
             palestra->postazioni[mia_postazione].servizio_corrente = mio_servizio;
             palestra->postazioni[mia_postazione].tkt_corrente = pacco.tkt_num;
 
-            printf("[ISTRUTTORE %d] Inizio servizio per Atleta %d (min %d), Durata: %d\n", id_istruttore, pacco.sender_id, inizio_erog, durata);
+            make_log("Istruttore %d: Inizio servizio per Atleta %d (min %d), Durata: %d\n", id_istruttore, pacco.sender_id, inizio_erog, durata);
 
             //Simulo tempo di lavoro
             sleep_min(durata, conf.n_nano_secs);
@@ -143,7 +145,7 @@ int main(int argc, char *argv[]){
                 sem_v(semid, MUX_STATS);
 
                 int durata_pausa = 5 + (rand() % 6); //pausa di 5/10 min
-                printf("[ISTRUTTORE %d] Pausa caffè...\n", id_istruttore);
+                make_log("Istruttore %d: Pausa caffè...\n", id_istruttore);
                 sleep_min(durata_pausa, conf.n_nano_secs);
             }else{
                 sem_v(semid, MUX_STATS);
@@ -158,7 +160,7 @@ int main(int argc, char *argv[]){
             if(msgsnd(msgid, &conferma, sizeof(struct msg_pacco) - sizeof(long), 0) == -1){
                 perror("[ISTRUTTORE] Errore invio conferma fine servizio.");
             }else{
-                printf("[ISTRUTTORE %d] Servizio completato per Atleta %d. Notifica inviata.\n", id_istruttore, (int)pacco.sender_id);
+                make_log("Istruttore %d: Servizio completato per Atleta %d. Notifica inviata.\n", id_istruttore, (int)pacco.sender_id);
             }
 
         }

@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <signal.h>
 
+//Macro usata per il logger
+#define LOG_SRC "MANAGER"
 
 
 
@@ -40,7 +42,7 @@ void handle_tick(int sig){
 int main(int argc, char*argv[]){
     //Leggo da file di configurazione
     char *nome_conf = (argc > 1) ? argv[1] : "conf_timeout.conf";
-    printf("[MANAGER] Uso file: %s\n", nome_conf); 
+    make_log("Uso file: %s\n", nome_conf); 
 
     conf = load_conf(nome_conf);
     pid_manager = getpid();
@@ -63,18 +65,18 @@ int main(int argc, char*argv[]){
 
 
     //Inizio blocco di auto-pulizia preventiva
-    printf("[MANAGER] Inizio pulizia preventiva ...\n");
+    make_log("Inizio pulizia preventiva ...\n");
     system("pkill -9 istruttore 2>/dev/null");
     system("pkill -9 atleta 2>/dev/null");
     system("pkill -9 erogatore 2>/dev/null");
     system("pkill -9 cronometro 2>/dev/null");
     sleep(1);
-    printf("[MANAGER] Pulizia completata. Nessun processo orfano rilevato.\n");
+    make_log("Pulizia completata. Nessun processo orfano rilevato.\n");
 
     //Creazione risorse IPC: memoria condivisa
     shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | IPC_EXCL | 0666);
     if(shmid == -1 && errno == EEXIST){
-        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        make_log( "Rilevate IPC pendenti. Pulisco...\n");
         int old_shmid = shmget(SHM_KEY, sizeof(StatoPalestra), 0666);
         shmctl(old_shmid, IPC_RMID, NULL);
 
@@ -86,7 +88,7 @@ int main(int argc, char*argv[]){
     //Creazione semafori
     semid  = semget(SEM_KEY, 2, IPC_CREAT | IPC_EXCL | 0666);
     if(semid == -1 && errno == EEXIST){
-        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        make_log("Rilevate IPC pendenti. Pulisco...\n");
         int old_semid = semget(SEM_KEY, 2, 0666);
         semctl(old_semid, 0, IPC_RMID);
 
@@ -102,7 +104,7 @@ int main(int argc, char*argv[]){
     memset(palestra, 0, sizeof(StatoPalestra));
     msgid = msgget(MSG_KEY, IPC_CREAT | IPC_EXCL | 0666);
     if(msgid == -1 && errno == EEXIST){
-        printf("[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
+        make_log("Rilevate IPC pendenti. Pulisco...\n");
         int old_msgid = msgget(MSG_KEY, 0666);
         msgctl(old_msgid, IPC_RMID, NULL);
 
@@ -148,14 +150,14 @@ int main(int argc, char*argv[]){
     }
 
     //Barriera di Inizializzazione
-    printf("[MANAGER] Attesa inizializzazione %d processi figli...\n", n_figli);
+    make_log("Attesa inizializzazione %d processi figli...\n", n_figli);
     struct sembuf wait_op = {BARRIER_SEM, -1, 0}; //Operazione p
     for(int i = 0; i < n_figli; i++){
         if(semop(semid, &wait_op, 1) == -1) perror("[MANAGER] Errore semop barriera\n");
     }
 
 
-    printf("[MANAGER] Tutti i processi sono allineati. Inizio simulazione !\n");
+    make_log("Tutti i processi sono allineati. Inizio simulazione !\n");
     
     //Cronometro
     if((pid_cronometro = fork()) == 0){
@@ -183,7 +185,7 @@ int main(int argc, char*argv[]){
         }
         sem_v(semid, MUX_STATS);
 
-        printf("--- [MANAGER] Inizio Giorno %d ---\n", g + 1);
+        make_log("--- Inizio Giorno %d ---\n", g + 1);
 
         //Assegno servizi e alle postazioni
         for(int i = 0; i < conf.nof_worker_seats; i++){
@@ -210,10 +212,10 @@ int main(int argc, char*argv[]){
                 //Se mancano meno di 30 min, richiesta viene negata
                 if(min_trascorsi > 370){
                     ack.tkt_num = -1;
-                    printf("[MANAGER] Minuto %d: Rifiutato ingresso nuovi atleti (Chiusura imminente) per PID %d.\n", min_trascorsi, req_ext.sender_id);
+                    make_log("Minuto %d: Rifiutato ingresso nuovi atleti (Chiusura imminente) per PID %d.\n", min_trascorsi, req_ext.sender_id);
                 }else{
                     ack.tkt_num = 1;
-                    printf("[MANAGER] Minuto %d: Autorizzato ingresso richiesto da PID %d.\n", min_trascorsi, req_ext.sender_id);
+                    make_log("Minuto %d: Autorizzato ingresso richiesto da PID %d.\n", min_trascorsi, req_ext.sender_id);
                 }
 
                 //Invio risposta su coda
@@ -233,7 +235,7 @@ int main(int argc, char*argv[]){
                 if(da_creare > 3) da_creare = 3;
                 if(da_creare == 0) da_creare = 1;
 
-                printf("[MANAGER] Alert ! %d messaggi in coda ! Creazione di %d nuovi istruttori...\n", pending_msgs, da_creare);
+                make_log("Alert ! %d messaggi in coda ! Creazione di %d nuovi istruttori...\n", pending_msgs, da_creare);
 
                 for(int k = 0; k < da_creare; k++){
                     pid_t p_new = fork();
@@ -260,7 +262,7 @@ int main(int argc, char*argv[]){
                         if(temp){
                             istruttori_pids = temp;
                             istruttori_pids[palestra->totale_operatori_attivi - 1] = p_new;
-                            printf("[MANAGER] Istruttore extra %d aggiunto (Tot: %d).\n", p_new, palestra->totale_operatori_attivi);
+                            make_log("Istruttore extra %d aggiunto (Tot: %d).\n", p_new, palestra->totale_operatori_attivi);
                         }
                     }
                 }
@@ -268,7 +270,7 @@ int main(int argc, char*argv[]){
         }
          
 
-        printf("[MANAGER] Fine giornata %d. Notifico gli istruttori...\n", g + 1);
+        make_log("Fine giornata %d. Notifico gli istruttori...\n", g + 1);
 
         for(int i = 0; i < palestra->totale_operatori_attivi; i++){
             if(istruttori_pids[i] > 0) kill(istruttori_pids[i], SIGUSR2);
@@ -301,7 +303,7 @@ int main(int argc, char*argv[]){
         save_stats(palestra, NULL, conf);
 
         if(msg_residui > conf.explode_threshold){
-            printf("[MANAGER] SOGLIA CRITICA SUPERATA (%d)! Chiusura.\n", msg_residui);
+            make_log("SOGLIA CRITICA SUPERATA (%d)! Chiusura.\n", msg_residui);
             strncpy(causa_chiusura, "EXPLODE", 20);
             break;
         }
@@ -325,7 +327,7 @@ void cleanup(){
     if(getpid() != pid_manager) exit(EXIT_SUCCESS);
     if(palestra) palestra->terminato = 1;
 
-    printf("[MANAGER] Chiusura simulazione (Causa: %s)...\n", causa_chiusura);
+    make_log("Chiusura simulazione (Causa: %s)...\n", causa_chiusura);
 
     //Invia SIGTERM ai figli diretti
     if(atleti_pids){
@@ -344,7 +346,7 @@ void cleanup(){
     if(pid_cronometro > 0) kill(pid_cronometro, SIGTERM);
 
     //Ciclo di attesa non bloccante, per gestire eventuali zombie
-    printf("[MANAGER] Raccolta processi figli in corso. Attendere prego...\n");
+    make_log("Raccolta processi figli in corso. Attendere prego...\n");
     int status;
     pid_t died_pid;
     int attempts = 0;
@@ -380,7 +382,7 @@ void cleanup(){
     }
     
 
-    printf("[MANAGER] Risorse pulite correttamente. A domani !\n");
+    make_log( "Risorse pulite correttamente. A domani !\n");
     exit(EXIT_SUCCESS);
 
 

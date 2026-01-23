@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ipc.h>
@@ -16,7 +17,7 @@
 #include <string.h>
 #include <time.h>
 
-
+//Macros
 #define TESTO_MAX 64
 #define NOF_SERVICES 6
 
@@ -41,6 +42,9 @@
 #define ENTRY_REQ 999 //da add_users a manager
 #define ENTRY_ACK 888 //da manager ad add_users
 #define ALERT_RESOURCES 777 ///Messaggio speciale da gym_monitor a manager
+
+//Macro per funzione logger
+#define make_log(fmt, ...) make_log_full(LOG_SRC, fmt, ##__VA_ARGS__)
 
 //Strutture per Statistiche
 typedef struct{
@@ -91,6 +95,7 @@ union semun {
     unsigned short *array;
 };
 
+//Funzione sleep per minuti simulati
 static inline void sleep_min(int min, long n_nano_secs){
     struct timespec ts;
     long long tot_nsecs = (long long) min * n_nano_secs; //forzo calcolo a 64 bit, con long long potrò avere num > 2 miliardi per nsecs
@@ -102,17 +107,18 @@ static inline void sleep_min(int min, long n_nano_secs){
 }
 
 //funzioni per semafori
+//Funzione di wait (decremento val semaforo)
 static inline void sem_p(int semid, int sem_num){
-    struct sembuf sb = {(unsigned short)sem_num, -1, SEM_UNDO}; //-1 = Wait
+    struct sembuf sb = {(unsigned short)sem_num, -1, SEM_UNDO};
     if(semop(semid, &sb, 1) == -1 && errno != EINTR) perror("Errore sem_p");
 }
-
+//Funzione di signal (incremento val semaforo)
 static inline void sem_v(int semid, int sem_num){
-    struct sembuf sb = {(unsigned short)sem_num, 1, SEM_UNDO};// 1 = Signal
+    struct sembuf sb = {(unsigned short)sem_num, 1, SEM_UNDO};
      if(semop(semid, &sb, 1) == -1 && errno != EINTR) perror("Errore sem_v");
 }
 
-//funzioni per sem barriera, senza undo
+//Funzioni per sem barriera, senza undo
 static inline void barrier_wait(int semid){ 
     struct sembuf sb = {BARRIER_SEM, -1, 0};
     if(semop(semid, &sb, 1) == -1 && errno != EINTR) perror("Errore barriera_wait");
@@ -123,11 +129,43 @@ static inline void barrier_signal(int semid){
 if(semop(semid, &sb, 1) == -1 && errno != EINTR) perror("Errore barriera_signal"); 
 }
 
+//Funzione per eseguire execve in modo sicuro
 void safe_exec(char *path, char *args[]){
     extern char **environ;
     execve(path, args, environ);
     perror("Errore fatale execve");
     exit(EXIT_FAILURE);
+}
+
+//Funzione per creazione log
+static inline void make_log_full(const char *source, const char *format, ...){
+    //Imposto timestamp
+    time_t now;
+    time(&now);
+    struct tm *info = localtime(&now);
+    char s_hour[20];
+    strftime(s_hour, 20, "%H:%M:%S", info);
+
+    //Gestione args variabili
+    va_list args_stdout, args_file;
+    va_start(args_stdout, format);
+    va_copy(args_file, args_stdout);
+
+    //Output su terminale
+    printf("[%s] [%-10s] ", s_hour, source);
+    vprintf(format, args_stdout);
+    printf("\n");
+    va_end(args_stdout);
+
+    //Output su log
+    FILE *f = fopen("palestra_sim.log", "a");
+    if(f != NULL){
+        fprintf(f, "[%s] [%-10s] ", s_hour, source);
+        vfprintf(f, format, args_file);
+        fprintf(f, "\n");
+        fclose(f);
+    }
+    va_end(args_file);
 }
 
 #endif
