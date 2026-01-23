@@ -65,18 +65,18 @@ int main(int argc, char*argv[]){
     sigaction(SIGINT, &sa, NULL);
 
      //Inizio blocco di auto-pulizia preventiva
-    printf("Inizio pulizia preventiva ...\n");
-    system("pkill -9 istruttore 2>/dev/null");
-    system("pkill -9 atleta 2>/dev/null");
-    system("pkill -9 erogatore 2>/dev/null");
-    system("pkill -9 cronometro 2>/dev/null");
+    printf("[MANAGER] Inizio pulizia preventiva ...\n");
+    system("[MANAGER] pkill -9 istruttore 2>/dev/null");
+    system("[MANAGER] pkill -9 atleta 2>/dev/null");
+    system("[MANAGER] pkill -9 erogatore 2>/dev/null");
+    system("[MANAGER] pkill -9 cronometro 2>/dev/null");
     sleep(1);
-    printf("Pulizia completata. Nessun processo orfano rilevato.\n");
+    printf("[MANAGER] Pulizia completata. Nessun processo orfano rilevato.\n");
 
      //Creazione risorse IPC: memoria condivisa
     shmid = shmget(SHM_KEY, sizeof(StatoPalestra), IPC_CREAT | IPC_EXCL | 0666);
     if(shmid == -1 && errno == EEXIST){
-        make_log( "Rilevate IPC pendenti. Pulisco...\n");
+        printf( "[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
         int old_shmid = shmget(SHM_KEY, sizeof(StatoPalestra), 0666);
         shmctl(old_shmid, IPC_RMID, NULL);
 
@@ -88,7 +88,7 @@ int main(int argc, char*argv[]){
     //Creazione semafori
     semid  = semget(SEM_KEY, 2, IPC_CREAT | IPC_EXCL | 0666);
     if(semid == -1 && errno == EEXIST){
-        make_log("Rilevate IPC pendenti. Pulisco...\n");
+        printf( "[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
         int old_semid = semget(SEM_KEY, 2, 0666);
         semctl(old_semid, 0, IPC_RMID);
 
@@ -104,7 +104,7 @@ int main(int argc, char*argv[]){
     memset(palestra, 0, sizeof(StatoPalestra));
     msgid = msgget(MSG_KEY, IPC_CREAT | IPC_EXCL | 0666);
     if(msgid == -1 && errno == EEXIST){
-        make_log("Rilevate IPC pendenti. Pulisco...\n");
+        printf( "[MANAGER] Rilevate IPC pendenti. Pulisco...\n");
         int old_msgid = msgget(MSG_KEY, 0666);
         msgctl(old_msgid, IPC_RMID, NULL);
 
@@ -251,7 +251,7 @@ void cleanup(){
     }
 
     printf("\n[MANAGER] Tempo scaduto, è ora di chiudere. Pulizia risorse ...\n");
-    printf("Causa Terminazione: %s\n", causa_chiusura);
+    printf("[MANAGER] Causa Terminazione: %s\n", causa_chiusura);
 
     //Ferma atleti
     if(atleti_pids){

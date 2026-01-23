@@ -53,14 +53,14 @@ int main(int argc, char *argv[]){
     int tkt_counter[NOF_SERVICES] = {0};
     int ultimo_giorno_visto = -1;
     struct msg_pacco msg;
-    printf("[EROGATORE] Receptionist automatica pronta.\n");
+    make_log("Receptionist automatica pronta.\n");
 
     while(1){
         //Controllo giornata per resettare i ticket
         if(palestra->giorno_corrente > ultimo_giorno_visto){
             ultimo_giorno_visto = palestra->giorno_corrente;
             for(int i = 0; i < NOF_SERVICES; i++){ tkt_counter[i] = 0;}
-            printf("[EROGATORE] Inizio giorno %d: contatori ticket resettati.\n", ultimo_giorno_visto + 1);
+            make_log("Inizio giorno %d: contatori ticket resettati.\n", ultimo_giorno_visto + 1);
         }
 
         //Resta in attesa di richieste da atleti (mtype = 1)
@@ -69,8 +69,9 @@ int main(int argc, char *argv[]){
             continue;
         }
 
-
+        sem_p(semid, MUX_STATS);
         palestra->coda_erogatore++;
+        sem_v(semid, MUX_STATS);
 
         sleep_min(1, conf.n_nano_secs);
 
@@ -83,9 +84,11 @@ int main(int argc, char *argv[]){
             tkt_counter[servizio]++;
             int num_assegnato = tkt_counter[servizio];
 
-            printf("[EROGATORE] Atleta %d richiede servizio %d. Assegnato ticket: %d\n", utente_id, servizio, num_assegnato);//
+            make_log("Atleta %d richiede servizio %d. Assegnato ticket: %d\n", utente_id, servizio, num_assegnato);
+            sem_p(semid, MUX_STATS);
             palestra->coda_erogatore--;
-
+            sem_v(semid, MUX_STATS);
+            
             //Prepara risposta 
             msg.mtype = utente_id;
             msg.sender_id = -1; //-1 = Erogatore risponde
